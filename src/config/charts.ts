@@ -1,0 +1,1 @@
+export const chartColors = { primary: "#0e7490", success: "#15803d", warning: "#b45309", muted: "#94a3b8", light: { text: "#64748b", grid: "rgba(100, 116, 139, 0.16)", tooltip: "#172033" }, dark: { text: "#94a3b8", grid: "rgba(148, 163, 184, 0.13)", tooltip: "#e2e8f0" } } as const;
