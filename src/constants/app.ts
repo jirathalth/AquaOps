@@ -1,4 +1,4 @@
-export const APP_NAME = "AquaFlow";
+export const APP_NAME = "AquaOps";
 export const DEFAULT_LOCALE = "th" as const;
 export const FALLBACK_LOCALE = "en" as const;
 export const BUSINESS_LOCALE = "th-TH";

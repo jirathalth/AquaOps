@@ -7,16 +7,138 @@ datasource db {
   provider = "postgresql"
 }
 
+enum CustomerType {
+  RETAIL
+  WHOLESALE
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AddressType {
+  BILLING
+  SHIPPING
+}
+
+enum SaleType {
+  CASH
+  CREDIT
+}
+
+enum PriceListStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  DELIVERING
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum InventoryMovementType {
+  OPENING
+  RECEIPT
+  ISSUE
+  TRANSFER
+  ADJUSTMENT
+  SALE
+  DELIVERY
+  RETURN
+}
+
+enum InventoryReservationStatus {
+  ACTIVE
+  RELEASED
+  FULFILLED
+}
+
+enum DeliveryTripStatus {
+  PLANNED
+  LOADING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliveryStopStatus {
+  PENDING
+  ARRIVED
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  LOADED
+  IN_TRANSIT
+  PARTIALLY_DELIVERED
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum BillingNoteStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  QR_CODE
+  CHEQUE
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  VOID
+}
+
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+  id                        String              @id
+  name                      String
+  email                     String              @unique
+  emailVerified             Boolean             @default(false)
+  image                     String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  sessions                  Session[]
+  accounts                  Account[]
+  roles                     UserRole[]          @relation("UserRoleUser")
+  assignedRoles             UserRole[]          @relation("UserRoleAssignedBy")
+  auditLogs                 AuditLog[]          @relation("AuditActor")
+  createdSalesOrders        SalesOrder[]        @relation("SalesOrderCreatedBy")
+  createdInventoryMovements InventoryMovement[] @relation("InventoryMovementCreatedBy")
+  createdDeliveryTrips      DeliveryTrip[]      @relation("DeliveryTripCreatedBy")
+  createdInvoices           Invoice[]           @relation("InvoiceCreatedBy")
+  createdBillingNotes       BillingNote[]       @relation("BillingNoteCreatedBy")
+  recordedPayments          Payment[]           @relation("PaymentRecordedBy")
 
   @@map("user")
 }
@@ -66,4 +188,673 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @db.VarChar(64)
+  name        String           @db.VarChar(120)
+  description String?
+  isSystem    Boolean          @default(false)
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique @db.VarChar(100)
+  name        String           @db.VarChar(120)
+  description String?
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId       String
+  roleId       String   @db.Uuid
+  assignedById String?
+  assignedAt   DateTime @default(now()) @db.Timestamptz(3)
+  user         User     @relation("UserRoleUser", fields: [userId], references: [id], onDelete: Cascade)
+  role         Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy   User?    @relation("UserRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@index([assignedById])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?
+  actorName  String?  @db.VarChar(120)
+  action     String   @db.VarChar(64)
+  entityType String   @db.VarChar(100)
+  entityId   String   @db.VarChar(100)
+  beforeData Json?
+  afterData  Json?
+  metadata   Json?
+  requestId  String?  @db.VarChar(100)
+  ipAddress  String?  @db.VarChar(64)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Customer {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  code               String                 @unique @db.VarChar(32)
+  type               CustomerType
+  status             RecordStatus           @default(ACTIVE)
+  legalName          String                 @db.VarChar(200)
+  displayName        String                 @db.VarChar(200)
+  taxId              String?                @db.VarChar(13)
+  taxBranchCode      String?                @db.VarChar(5)
+  contactName        String?                @db.VarChar(120)
+  phone              String?                @db.VarChar(32)
+  email              String?                @db.VarChar(254)
+  defaultSaleType    SaleType               @default(CASH)
+  creditLimit        Decimal                @default(0) @db.Decimal(14, 2)
+  creditTermDays     Int                    @default(0)
+  defaultPriceListId String?                @db.Uuid
+  notes              String?
+  createdAt          DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime               @updatedAt @db.Timestamptz(3)
+  deletedAt          DateTime?              @db.Timestamptz(3)
+  defaultPriceList   PriceList?             @relation(fields: [defaultPriceListId], references: [id], onDelete: SetNull)
+  addresses          CustomerAddress[]
+  customPrices       CustomerProductPrice[]
+  salesOrders        SalesOrder[]
+  deliveryStops      DeliveryStop[]
+  invoices           Invoice[]
+  billingNotes       BillingNote[]
+  payments           Payment[]
+
+  @@unique([taxId, taxBranchCode])
+  @@index([type, status])
+  @@index([displayName])
+  @@index([defaultPriceListId])
+  @@index([deletedAt])
+  @@map("customers")
+}
+
+model CustomerAddress {
+  id            String      @id @default(uuid()) @db.Uuid
+  customerId    String      @db.Uuid
+  type          AddressType
+  label         String?     @db.VarChar(100)
+  contactName   String?     @db.VarChar(120)
+  phone         String?     @db.VarChar(32)
+  addressLine1  String      @db.VarChar(255)
+  addressLine2  String?     @db.VarChar(255)
+  subdistrict   String?     @db.VarChar(100)
+  district      String?     @db.VarChar(100)
+  province      String      @db.VarChar(100)
+  postalCode    String?     @db.VarChar(10)
+  countryCode   String      @default("TH") @db.Char(2)
+  deliveryNotes String?
+  isDefault     Boolean     @default(false)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, type])
+  @@map("customer_addresses")
+}
+
+model ProductCategory {
+  id        String            @id @default(uuid()) @db.Uuid
+  code      String            @unique @db.VarChar(32)
+  name      String            @db.VarChar(120)
+  parentId  String?           @db.Uuid
+  isActive  Boolean           @default(true)
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime          @updatedAt @db.Timestamptz(3)
+  parent    ProductCategory?  @relation("ProductCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  ProductCategory[] @relation("ProductCategoryTree")
+  products  Product[]
+
+  @@index([parentId])
+  @@map("product_categories")
+}
+
+model UnitOfMeasure {
+  id           String        @id @default(uuid()) @db.Uuid
+  code         String        @unique @db.VarChar(32)
+  nameTh       String        @db.VarChar(100)
+  nameEn       String?       @db.VarChar(100)
+  symbol       String        @db.VarChar(32)
+  decimalScale Int           @default(0)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+  productUnits ProductUnit[]
+
+  @@map("units_of_measure")
+}
+
+model Product {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  sku                   String                 @unique @db.VarChar(64)
+  name                  String                 @db.VarChar(200)
+  description           String?
+  categoryId            String?                @db.Uuid
+  status                RecordStatus           @default(ACTIVE)
+  trackInventory        Boolean                @default(true)
+  reorderLevel          Decimal                @default(0) @db.Decimal(14, 3)
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime?              @db.Timestamptz(3)
+  category              ProductCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  units                 ProductUnit[]
+  stockBalances         StockBalance[]
+  inventoryEntries      InventoryLedgerEntry[]
+  inventoryReservations InventoryReservation[]
+  salesOrderItems       SalesOrderItem[]
+  invoiceItems          InvoiceItem[]
+
+  @@index([categoryId, status])
+  @@index([name])
+  @@index([deletedAt])
+  @@map("products")
+}
+
+model ProductUnit {
+  id               String                 @id @default(uuid()) @db.Uuid
+  productId        String                 @db.Uuid
+  unitId           String                 @db.Uuid
+  conversionFactor Decimal                @db.Decimal(14, 6)
+  barcode          String?                @unique @db.VarChar(64)
+  isBase           Boolean                @default(false)
+  isActive         Boolean                @default(true)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(3)
+  product          Product                @relation(fields: [productId], references: [id], onDelete: Restrict)
+  unit             UnitOfMeasure          @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  priceListItems   PriceListItem[]
+  customerPrices   CustomerProductPrice[]
+  salesOrderItems  SalesOrderItem[]
+  invoiceItems     InvoiceItem[]
+
+  @@unique([productId, unitId])
+  @@index([unitId])
+  @@map("product_units")
+}
+
+model PriceList {
+  id          String          @id @default(uuid()) @db.Uuid
+  code        String          @unique @db.VarChar(32)
+  name        String          @db.VarChar(120)
+  description String?
+  status      PriceListStatus @default(DRAFT)
+  currency    String          @default("THB") @db.Char(3)
+  validFrom   DateTime?       @db.Timestamptz(3)
+  validTo     DateTime?       @db.Timestamptz(3)
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
+  customers   Customer[]
+  items       PriceListItem[]
+  salesOrders SalesOrder[]
+
+  @@index([status, validFrom, validTo])
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id              String      @id @default(uuid()) @db.Uuid
+  priceListId     String      @db.Uuid
+  productUnitId   String      @db.Uuid
+  minimumQuantity Decimal     @default(1) @db.Decimal(14, 3)
+  unitPrice       Decimal     @db.Decimal(14, 4)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(3)
+  priceList       PriceList   @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  productUnit     ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
+
+  @@unique([priceListId, productUnitId, minimumQuantity])
+  @@index([productUnitId])
+  @@map("price_list_items")
+}
+
+model CustomerProductPrice {
+  id            String      @id @default(uuid()) @db.Uuid
+  customerId    String      @db.Uuid
+  productUnitId String      @db.Uuid
+  unitPrice     Decimal     @db.Decimal(14, 4)
+  validFrom     DateTime    @default(now()) @db.Timestamptz(3)
+  validTo       DateTime?   @db.Timestamptz(3)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @db.Timestamptz(3)
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productUnit   ProductUnit @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
+
+  @@unique([customerId, productUnitId, validFrom])
+  @@index([productUnitId])
+  @@index([customerId, validFrom, validTo])
+  @@map("customer_product_prices")
+}
+
+model Warehouse {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  code                  String                 @unique @db.VarChar(32)
+  name                  String                 @db.VarChar(120)
+  address               Json?
+  status                RecordStatus           @default(ACTIVE)
+  isDefault             Boolean                @default(false)
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(3)
+  salesOrders           SalesOrder[]
+  stockBalances         StockBalance[]
+  inventoryEntries      InventoryLedgerEntry[]
+  inventoryReservations InventoryReservation[]
+  sourceMovements       InventoryMovement[]    @relation("MovementSourceWarehouse")
+  destinationMovements  InventoryMovement[]    @relation("MovementDestinationWarehouse")
+  deliveryTrips         DeliveryTrip[]
+
+  @@index([status])
+  @@map("warehouses")
+}
+
+model StockBalance {
+  id               String    @id @default(uuid()) @db.Uuid
+  warehouseId      String    @db.Uuid
+  productId        String    @db.Uuid
+  onHandQuantity   Decimal   @default(0) @db.Decimal(14, 3)
+  reservedQuantity Decimal   @default(0) @db.Decimal(14, 3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+  warehouse        Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product          Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([warehouseId, productId])
+  @@index([productId])
+  @@map("stock_balances")
+}
+
+model InventoryMovement {
+  id                     String                 @id @default(uuid()) @db.Uuid
+  movementNo             String                 @unique @db.VarChar(32)
+  type                   InventoryMovementType
+  occurredAt             DateTime               @db.Timestamptz(3)
+  sourceWarehouseId      String?                @db.Uuid
+  destinationWarehouseId String?                @db.Uuid
+  referenceType          String?                @db.VarChar(64)
+  referenceId            String?                @db.VarChar(100)
+  notes                  String?
+  createdById            String?
+  createdAt              DateTime               @default(now()) @db.Timestamptz(3)
+  sourceWarehouse        Warehouse?             @relation("MovementSourceWarehouse", fields: [sourceWarehouseId], references: [id], onDelete: Restrict)
+  destinationWarehouse   Warehouse?             @relation("MovementDestinationWarehouse", fields: [destinationWarehouseId], references: [id], onDelete: Restrict)
+  createdBy              User?                  @relation("InventoryMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  entries                InventoryLedgerEntry[]
+
+  @@index([type, occurredAt])
+  @@index([referenceType, referenceId])
+  @@index([sourceWarehouseId])
+  @@index([destinationWarehouseId])
+  @@index([createdById])
+  @@map("inventory_movements")
+}
+
+model InventoryLedgerEntry {
+  id          String            @id @default(uuid()) @db.Uuid
+  movementId  String            @db.Uuid
+  warehouseId String            @db.Uuid
+  productId   String            @db.Uuid
+  quantity    Decimal           @db.Decimal(14, 3)
+  unitCost    Decimal?          @db.Decimal(14, 4)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  movement    InventoryMovement @relation(fields: [movementId], references: [id], onDelete: Restrict)
+  warehouse   Warehouse         @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product     Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([movementId])
+  @@index([warehouseId, productId, createdAt])
+  @@index([productId, createdAt])
+  @@map("inventory_ledger_entries")
+}
+
+model InventoryReservation {
+  id               String                     @id @default(uuid()) @db.Uuid
+  salesOrderItemId String                     @db.Uuid
+  warehouseId      String                     @db.Uuid
+  productId        String                     @db.Uuid
+  quantity         Decimal                    @db.Decimal(14, 3)
+  status           InventoryReservationStatus @default(ACTIVE)
+  createdAt        DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                   @updatedAt @db.Timestamptz(3)
+  salesOrderItem   SalesOrderItem             @relation(fields: [salesOrderItemId], references: [id], onDelete: Restrict)
+  warehouse        Warehouse                  @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  product          Product                    @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([warehouseId, productId, status])
+  @@index([salesOrderItemId, status])
+  @@map("inventory_reservations")
+}
+
+model SalesOrder {
+  id                    String           @id @default(uuid()) @db.Uuid
+  orderNo               String           @unique @db.VarChar(32)
+  customerId            String           @db.Uuid
+  warehouseId           String           @db.Uuid
+  priceListId           String?          @db.Uuid
+  status                SalesOrderStatus @default(DRAFT)
+  saleType              SaleType
+  orderDate             DateTime         @db.Date
+  requestedDeliveryDate DateTime?        @db.Date
+  currency              String           @default("THB") @db.Char(3)
+  billingAddress        Json?
+  shippingAddress       Json?
+  subtotal              Decimal          @default(0) @db.Decimal(14, 2)
+  discountAmount        Decimal          @default(0) @db.Decimal(14, 2)
+  taxAmount             Decimal          @default(0) @db.Decimal(14, 2)
+  totalAmount           Decimal          @default(0) @db.Decimal(14, 2)
+  notes                 String?
+  confirmedAt           DateTime?        @db.Timestamptz(3)
+  cancelledAt           DateTime?        @db.Timestamptz(3)
+  createdById           String?
+  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
+  customer              Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  warehouse             Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  priceList             PriceList?       @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  createdBy             User?            @relation("SalesOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items                 SalesOrderItem[]
+  deliveries            Delivery[]
+  invoices              Invoice[]
+
+  @@index([customerId, orderDate])
+  @@index([warehouseId, status])
+  @@index([status, orderDate])
+  @@index([requestedDeliveryDate, status])
+  @@index([priceListId])
+  @@index([createdById])
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id                String                 @id @default(uuid()) @db.Uuid
+  salesOrderId      String                 @db.Uuid
+  lineNo            Int
+  productId         String                 @db.Uuid
+  productUnitId     String                 @db.Uuid
+  sku               String                 @db.VarChar(64)
+  description       String                 @db.VarChar(255)
+  quantity          Decimal                @db.Decimal(14, 3)
+  conversionFactor  Decimal                @db.Decimal(14, 6)
+  baseQuantity      Decimal                @db.Decimal(14, 3)
+  fulfilledQuantity Decimal                @default(0) @db.Decimal(14, 3)
+  unitPrice         Decimal                @db.Decimal(14, 4)
+  discountAmount    Decimal                @default(0) @db.Decimal(14, 2)
+  taxRate           Decimal                @default(0) @db.Decimal(5, 2)
+  taxAmount         Decimal                @default(0) @db.Decimal(14, 2)
+  lineTotal         Decimal                @db.Decimal(14, 2)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  salesOrder        SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product           Product                @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productUnit       ProductUnit            @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
+  reservations      InventoryReservation[]
+  deliveryItems     DeliveryItem[]
+  invoiceItems      InvoiceItem[]
+
+  @@unique([salesOrderId, lineNo])
+  @@index([productId])
+  @@index([productUnitId])
+  @@map("sales_order_items")
+}
+
+model DeliveryTrip {
+  id           String             @id @default(uuid()) @db.Uuid
+  tripNo       String             @unique @db.VarChar(32)
+  warehouseId  String             @db.Uuid
+  status       DeliveryTripStatus @default(PLANNED)
+  plannedDate  DateTime           @db.Date
+  driverName   String?            @db.VarChar(120)
+  vehiclePlate String?            @db.VarChar(32)
+  departedAt   DateTime?          @db.Timestamptz(3)
+  returnedAt   DateTime?          @db.Timestamptz(3)
+  notes        String?
+  createdById  String?
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime           @updatedAt @db.Timestamptz(3)
+  warehouse    Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  createdBy    User?              @relation("DeliveryTripCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  stops        DeliveryStop[]
+
+  @@index([warehouseId, plannedDate])
+  @@index([status, plannedDate])
+  @@index([createdById])
+  @@map("delivery_trips")
+}
+
+model DeliveryStop {
+  id              String             @id @default(uuid()) @db.Uuid
+  deliveryTripId  String             @db.Uuid
+  sequence        Int
+  customerId      String             @db.Uuid
+  addressSnapshot Json
+  status          DeliveryStopStatus @default(PENDING)
+  arrivedAt       DateTime?          @db.Timestamptz(3)
+  completedAt     DateTime?          @db.Timestamptz(3)
+  notes           String?
+  createdAt       DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @db.Timestamptz(3)
+  deliveryTrip    DeliveryTrip       @relation(fields: [deliveryTripId], references: [id], onDelete: Cascade)
+  customer        Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  deliveries      Delivery[]
+
+  @@unique([deliveryTripId, sequence])
+  @@index([customerId])
+  @@index([status])
+  @@map("delivery_stops")
+}
+
+model Delivery {
+  id             String         @id @default(uuid()) @db.Uuid
+  deliveryNo     String         @unique @db.VarChar(32)
+  deliveryStopId String         @db.Uuid
+  salesOrderId   String         @db.Uuid
+  status         DeliveryStatus @default(PENDING)
+  deliveredAt    DateTime?      @db.Timestamptz(3)
+  receivedBy     String?        @db.VarChar(120)
+  notes          String?
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
+  deliveryStop   DeliveryStop   @relation(fields: [deliveryStopId], references: [id], onDelete: Restrict)
+  salesOrder     SalesOrder     @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  items          DeliveryItem[]
+
+  @@unique([deliveryStopId, salesOrderId])
+  @@index([salesOrderId, status])
+  @@map("deliveries")
+}
+
+model DeliveryItem {
+  id                    String         @id @default(uuid()) @db.Uuid
+  deliveryId            String         @db.Uuid
+  salesOrderItemId      String         @db.Uuid
+  plannedQuantity       Decimal        @db.Decimal(14, 3)
+  deliveredQuantity     Decimal        @default(0) @db.Decimal(14, 3)
+  plannedBaseQuantity   Decimal        @db.Decimal(14, 3)
+  deliveredBaseQuantity Decimal        @default(0) @db.Decimal(14, 3)
+  createdAt             DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime       @updatedAt @db.Timestamptz(3)
+  delivery              Delivery       @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  salesOrderItem        SalesOrderItem @relation(fields: [salesOrderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([deliveryId, salesOrderItemId])
+  @@index([salesOrderItemId])
+  @@map("delivery_items")
+}
+
+model Invoice {
+  id                 String               @id @default(uuid()) @db.Uuid
+  invoiceNo          String               @unique @db.VarChar(32)
+  customerId         String               @db.Uuid
+  salesOrderId       String?              @db.Uuid
+  status             InvoiceStatus        @default(DRAFT)
+  invoiceDate        DateTime             @db.Date
+  dueDate            DateTime             @db.Date
+  currency           String               @default("THB") @db.Char(3)
+  billingAddress     Json?
+  subtotal           Decimal              @default(0) @db.Decimal(14, 2)
+  discountAmount     Decimal              @default(0) @db.Decimal(14, 2)
+  taxAmount          Decimal              @default(0) @db.Decimal(14, 2)
+  totalAmount        Decimal              @default(0) @db.Decimal(14, 2)
+  notes              String?
+  issuedAt           DateTime?            @db.Timestamptz(3)
+  voidedAt           DateTime?            @db.Timestamptz(3)
+  createdById        String?
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
+  customer           Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder         SalesOrder?          @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  createdBy          User?                @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items              InvoiceItem[]
+  billingNotes       BillingNoteInvoice[]
+  paymentAllocations PaymentAllocation[]
+
+  @@index([customerId, invoiceDate])
+  @@index([customerId, status, dueDate])
+  @@index([salesOrderId])
+  @@index([status, dueDate])
+  @@index([createdById])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id               String          @id @default(uuid()) @db.Uuid
+  invoiceId        String          @db.Uuid
+  lineNo           Int
+  salesOrderItemId String?         @db.Uuid
+  productId        String?         @db.Uuid
+  productUnitId    String?         @db.Uuid
+  description      String          @db.VarChar(255)
+  quantity         Decimal         @db.Decimal(14, 3)
+  unitPrice        Decimal         @db.Decimal(14, 4)
+  discountAmount   Decimal         @default(0) @db.Decimal(14, 2)
+  taxRate          Decimal         @default(0) @db.Decimal(5, 2)
+  taxAmount        Decimal         @default(0) @db.Decimal(14, 2)
+  lineTotal        Decimal         @db.Decimal(14, 2)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+  invoice          Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  salesOrderItem   SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: Restrict)
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productUnit      ProductUnit?    @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, lineNo])
+  @@index([salesOrderItemId])
+  @@index([productId])
+  @@index([productUnitId])
+  @@map("invoice_items")
+}
+
+model BillingNote {
+  id                 String               @id @default(uuid()) @db.Uuid
+  billingNo          String               @unique @db.VarChar(32)
+  customerId         String               @db.Uuid
+  status             BillingNoteStatus    @default(DRAFT)
+  billingDate        DateTime             @db.Date
+  dueDate            DateTime             @db.Date
+  currency           String               @default("THB") @db.Char(3)
+  totalAmount        Decimal              @default(0) @db.Decimal(14, 2)
+  notes              String?
+  issuedAt           DateTime?            @db.Timestamptz(3)
+  cancelledAt        DateTime?            @db.Timestamptz(3)
+  createdById        String?
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
+  customer           Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy          User?                @relation("BillingNoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  invoices           BillingNoteInvoice[]
+  paymentAllocations PaymentAllocation[]
+
+  @@index([customerId, billingDate])
+  @@index([customerId, status, dueDate])
+  @@index([status, dueDate])
+  @@index([createdById])
+  @@map("billing_notes")
+}
+
+model BillingNoteInvoice {
+  id            String      @id @default(uuid()) @db.Uuid
+  billingNoteId String      @db.Uuid
+  invoiceId     String      @db.Uuid
+  amount        Decimal     @db.Decimal(14, 2)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  billingNote   BillingNote @relation(fields: [billingNoteId], references: [id], onDelete: Cascade)
+  invoice       Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([billingNoteId, invoiceId])
+  @@index([invoiceId])
+  @@map("billing_note_invoices")
+}
+
+model Payment {
+  id                String              @id @default(uuid()) @db.Uuid
+  paymentNo         String              @unique @db.VarChar(32)
+  customerId        String              @db.Uuid
+  status            PaymentStatus       @default(PENDING)
+  method            PaymentMethod
+  paymentDate       DateTime            @db.Date
+  amount            Decimal             @db.Decimal(14, 2)
+  currency          String              @default("THB") @db.Char(3)
+  externalReference String?             @db.VarChar(100)
+  receivedAccount   String?             @db.VarChar(120)
+  notes             String?
+  completedAt       DateTime?           @db.Timestamptz(3)
+  voidedAt          DateTime?           @db.Timestamptz(3)
+  recordedById      String?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  recordedBy        User?               @relation("PaymentRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  allocations       PaymentAllocation[]
+
+  @@index([customerId, paymentDate])
+  @@index([customerId, status])
+  @@index([externalReference])
+  @@index([recordedById])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id            String       @id @default(uuid()) @db.Uuid
+  paymentId     String       @db.Uuid
+  invoiceId     String       @db.Uuid
+  billingNoteId String?      @db.Uuid
+  amount        Decimal      @db.Decimal(14, 2)
+  allocatedAt   DateTime     @default(now()) @db.Timestamptz(3)
+  payment       Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  invoice       Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  billingNote   BillingNote? @relation(fields: [billingNoteId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, invoiceId])
+  @@index([invoiceId, allocatedAt])
+  @@index([billingNoteId])
+  @@map("payment_allocations")
 }

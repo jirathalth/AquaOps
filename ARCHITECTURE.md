@@ -1,8 +1,8 @@
-# AquaFlow Architecture
+# AquaOps Architecture
 
 ## Tech stack
 
-- Next.js 16, React 19, TypeScript, App Router
+- Next.js 16, React 19, TypeScript, App Router, IBM Plex Sans Thai
 - Tailwind CSS 4, shadcn/ui source components, Lucide
 - TanStack Table, React Hook Form, Zod
 - PostgreSQL, Prisma ORM
@@ -61,7 +61,7 @@ Route handlers and future Server Actions validate transport input, then call ser
 
 ## Database strategy
 
-Prisma uses PostgreSQL through the `pg` driver adapter. The schema currently includes only Better Auth tables. Business models will be added through reviewed migrations per feature. A singleton client prevents excess development connections.
+Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. Phase 1 business models use UUIDs, exact decimals, restrictive foreign keys, snapshot fields, an append-only inventory ledger, and invoice/payment allocations as the accounts-receivable source of truth. A singleton client prevents excess development connections. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).
 
 ## Authentication strategy
 

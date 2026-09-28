@@ -1,6 +1,6 @@
-# AquaFlow
+# AquaOps
 
-ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม โครงการนี้เป็น technical foundation และ UI shell เท่านั้น ยังไม่มี business CRUD หรือ workflow จริง
+ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม ปัจจุบันมี technical foundation, UI shell และ Phase 1 database architecture แล้ว แต่ยังไม่มี business CRUD หรือ workflow จริง
 
 ## Requirements
 
@@ -23,14 +23,21 @@ cp .env.example .env
 
 ## Database
 
-สร้างฐานข้อมูล `aquaflow` แล้วรัน:
+สร้างฐานข้อมูล `aquaops` แล้วรัน:
 
 ```bash
+npm run db:validate
 npm run db:generate
-npm run db:migrate -- --name init
+npm run db:deploy
 ```
 
-Prisma schema ปัจจุบันมีเฉพาะตารางพื้นฐานของ Better Auth ยังไม่มี schema ของโมดูลธุรกิจ
+Prisma schema ครอบคลุมฐานข้อมูล Phase 1, Better Auth, RBAC และ audit history แล้ว ดูรายละเอียดและ transaction rules ที่ [DATABASE.md](./DATABASE.md)
+
+ระหว่างพัฒนา schema ให้สร้าง migration ด้วย:
+
+```bash
+npm run db:migrate -- --name <change_name>
+```
 
 ## Development
 
