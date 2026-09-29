@@ -11,6 +11,7 @@
 ## Installation
 
 ```bash
+nvm use
 npm install
 cp .env.example .env
 ```
