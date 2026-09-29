@@ -9,7 +9,7 @@
 
 * { border-color: var(--border); }
 html { text-rendering: optimizeLegibility; }
-body { min-height: 100vh; background: var(--background); color: var(--foreground); font-size: 0.875rem; line-height: 1.5; font-synthesis: none; }
+body { min-height: 100dvh; background: var(--background); color: var(--foreground); font-size: 0.875rem; line-height: 1.6; font-synthesis: none; }
 button, a, input, textarea, select { outline-color: var(--ring); }
 button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
 ::selection { background: color-mix(in oklab, var(--primary) 22%, transparent); }
@@ -21,7 +21,7 @@ button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: poi
 .type-label { font-size: 0.8125rem; font-weight: 500; line-height: 1.5; }
 .type-caption { color: var(--muted-foreground); font-size: 0.75rem; line-height: 1.5; }
 .type-table-header { font-size: 0.75rem; font-weight: 600; line-height: 1.5; }
-.type-table-cell { font-size: 0.8125rem; line-height: 1.5; }
+.type-table-cell { font-size: 0.8125rem; line-height: 1.6; }
 .page-container { margin-inline: auto; width: 100%; max-width: 112.5rem; }
 .page-stack { display: flex; flex-direction: column; gap: 1.25rem; }
 .tabular-nums { font-variant-numeric: tabular-nums; white-space: nowrap; }

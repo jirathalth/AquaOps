@@ -14,6 +14,17 @@ For every task involving UI, UX, pages, layouts, components, dashboards, forms, 
 
 Repository instructions and the existing AquaOps design system take precedence over generic skill recommendations. Preserve the current architecture, components, functionality, visual language, semantic tokens, IBM Plex Sans Thai typography, shadcn/ui foundation, and Lucide icon system. Do not introduce a second design system or replace a suitable existing library or pattern.
 
+### UI implementation priority
+
+Read `design.md` before implementing UI. Apply UI guidance in this order:
+
+1. Existing AquaOps architecture, functionality, business behavior, data flow, and routing.
+2. AquaOps `design.md`.
+3. Existing reusable AquaOps components and established patterns.
+4. `ui-ux-pro-max` expertise and recommendations.
+
+If `ui-ux-pro-max` conflicts with a sound established AquaOps pattern, preserve consistency unless the existing pattern has a clear usability, accessibility, or responsive problem.
+
 ### Product and visual direction
 
 AquaOps is an internal drinking-water factory operations platform covering dashboards, customers, products, retail and wholesale orders, cash and credit billing, invoicing, payments, delivery, inventory, production, reports, and settings. It must feel like a professional operations platform, not a marketing website.
