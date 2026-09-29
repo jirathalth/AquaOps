@@ -59,6 +59,8 @@ Thai is the default language, English is the fallback. Locale, currency, and tim
 
 Route handlers and Server Actions validate transport input, then call services. Services implement authorization and workflows. Repositories contain Prisma queries and never return HTTP responses. Admin user/role actions are the reference mutation path: Zod → server permission guard → service rules/transaction → repository/database.
 
+Customer Management follows the same boundary: Server Components load paginated query results, the feature-owned React Hook Form sends plain values to Server Actions, `customer.service` applies normalization and transaction rules, and `customer.repository` is the only layer that queries Prisma. Customer, address replacement, sequence-generated code, and audit writes share one interactive transaction. Currency inputs stay decimal strings until Prisma/PostgreSQL persistence.
+
 ## Database strategy
 
 Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. Phase 1 business models use UUIDs, exact decimals, restrictive foreign keys, snapshot fields, an append-only inventory ledger, and invoice/payment allocations as the accounts-receivable source of truth. A singleton client prevents excess development connections. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).

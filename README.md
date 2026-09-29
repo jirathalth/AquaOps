@@ -1,6 +1,6 @@
 # AquaOps
 
-ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม ปัจจุบันมี technical foundation, UI shell, Phase 1 database architecture และ Authentication/RBAC แล้ว แต่ยังไม่มี business CRUD หรือ workflow จริง
+ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม ปัจจุบันมี technical foundation, UI shell, Phase 1 database architecture, Authentication/RBAC และ Customer Management แล้ว
 
 ## Requirements
 
@@ -36,7 +36,7 @@ npm run db:deploy
 npm run db:seed
 ```
 
-Seed ทำงานแบบ idempotent สำหรับ permissions, system roles และ role-permission mappings โดยไม่เก็บรหัสผ่านไว้ใน source code หากไม่กำหนด bootstrap/dev seed variables จะสร้างเฉพาะ RBAC registry
+Seed ทำงานแบบ idempotent สำหรับ permissions, system roles และ role-permission mappings โดยไม่เก็บรหัสผ่านไว้ใน source code เมื่อเปิด development seed จะสร้างราคาขายและข้อมูลลูกค้าตัวอย่างทั้งปลีก/ส่ง เงินสด/เครดิต ที่อยู่หลายประเภท และสถานะ active/inactive
 
 Prisma schema ครอบคลุมฐานข้อมูล Phase 1, Better Auth, RBAC และ audit history แล้ว ดูรายละเอียดและ transaction rules ที่ [DATABASE.md](./DATABASE.md)
 
@@ -55,6 +55,8 @@ npm run dev
 เปิด [http://localhost:3000](http://localhost:3000) หน้าแดชบอร์ดใช้ mock data เท่านั้น
 
 ทุกหน้าภายในต้องเข้าสู่ระบบ หน้า `/admin/users` และ `/admin/roles` ใช้จัดการผู้ใช้ บทบาท และสิทธิ์ตาม permission ของผู้ปฏิบัติงาน บัญชี inactive จะเข้าสู่ระบบหรือใช้ session เดิมต่อไม่ได้
+
+Customer Management อยู่ที่ `/customers` รองรับการค้นหา/กรอง/เรียง/แบ่งหน้าแบบ server-side, เพิ่ม แก้ไข ดูรายละเอียด ที่อยู่หลายรายการ เงื่อนไขเครดิต ราคาขาย รอบวางบิล และเปิด/ปิดใช้งานตาม RBAC
 
 ในโหมดพัฒนา เปิด `/dev/ui` เพื่อตรวจสอบ typography, forms, statuses, tables และ interaction patterns ของ design system หน้านี้คืนค่า 404 ใน production
 

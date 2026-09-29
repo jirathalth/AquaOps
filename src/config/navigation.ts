@@ -8,7 +8,7 @@ export type NavGroup = { label?: MessageKey; items: NavItem[] };
 
 export const navigation: NavGroup[] = [
   { items: [{ label: "dashboard", href: "/dashboard", icon: Gauge, permission: "dashboard.view" }] },
-  { label: "sales", items: [{ label: "orders", href: "/sales/orders", icon: ReceiptText, permission: "sales_order.view" }, { label: "customers", href: "/sales/customers", icon: UsersRound, permission: "customer.view" }] },
+  { label: "sales", items: [{ label: "orders", href: "/sales/orders", icon: ReceiptText, permission: "sales_order.view" }, { label: "customers", href: "/customers", icon: UsersRound, permission: "customer.view" }] },
   { label: "delivery", items: [{ label: "deliveryTrips", href: "/delivery/trips", icon: Truck, permission: "delivery.view" }] },
   { label: "accounting", items: [{ label: "invoices", href: "/accounting/invoices", icon: FileText, permission: "invoice.view" }, { label: "billing", href: "/accounting/billing", icon: Building2, permission: "billing.view" }, { label: "payments", href: "/accounting/payments", icon: WalletCards, permission: "payment.view" }, { label: "receivables", href: "/accounting/receivables", icon: BarChart3, permission: "ar.view" }] },
   { label: "inventory", items: [{ label: "products", href: "/inventory/products", icon: Boxes, permission: "product.view" }, { label: "stock", href: "/inventory/stock", icon: Warehouse, permission: "inventory.view" }, { label: "stockMovements", href: "/inventory/movements", icon: Boxes, permission: "inventory.view" }] },

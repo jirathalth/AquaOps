@@ -27,7 +27,7 @@ It defines persistence and integrity only. CRUD, workflows, numbering, status tr
 | Authentication | `User`, `Session`, `Account`, `Verification` | Owned by Better Auth; `User.status` blocks inactive accounts |
 | Authorization | `Role`, `Permission`, `UserRole`, `RolePermission` | Application RBAC; server-side enforcement is required |
 | Audit | `AuditLog` | Generic append-only before/after history with actor snapshots |
-| Customers | `Customer`, `CustomerAddress` | Retail/wholesale, cash/credit defaults, credit terms, multiple addresses |
+| Customers | `Customer`, `CustomerAddress` | Retail/wholesale, cash/credit defaults, credit terms, billing cycles, multiple billing/shipping addresses |
 | Catalog | `ProductCategory`, `Product`, `UnitOfMeasure`, `ProductUnit` | Multiple selling units with conversion to one base unit |
 | Pricing | `PriceList`, `PriceListItem`, `CustomerProductPrice` | Multiple lists, quantity tiers, and time-bounded customer overrides |
 | Sales | `SalesOrder`, `SalesOrderItem` | Snapshot values and cash/credit classification |
@@ -75,15 +75,25 @@ Foreign keys use restrictive deletion for business history. Cascades are limited
 
 ## Required service transactions
 
-Future services must use Prisma interactive transactions for these operations:
+Services must use Prisma interactive transactions for these operations:
 
-1. Confirm an order: validate price/credit, reserve stock, update status, write audit log.
-2. Post inventory: create one movement and all ledger entries; transfers must create balanced source and destination entries.
-3. Complete delivery: record delivered quantities, post inventory issue, release/fulfill reservations, update order state.
-4. Issue invoice or billing note: lock the source document, calculate totals server-side, persist lines, update status, write audit log.
-5. Complete or void payment: lock payment/invoices, maintain allocations, update derived statuses, write audit log.
+1. Create/update a customer: generate the customer code from `customer_code_seq`, persist customer and addresses, and append an audit record atomically. Sequence gaps after rollbacks are accepted; duplicate codes are not.
+2. Confirm an order: validate price/credit, reserve stock, update status, write audit log.
+3. Post inventory: create one movement and all ledger entries; transfers must create balanced source and destination entries.
+4. Complete delivery: record delivered quantities, post inventory issue, release/fulfill reservations, update order state.
+5. Issue invoice or billing note: lock the source document, calculate totals server-side, persist lines, update status, write audit log.
+6. Complete or void payment: lock payment/invoices, maintain allocations, update derived statuses, write audit log.
 
-Document numbers must be generated atomically by a repository or database sequence when each module is implemented. Client-supplied totals, prices, permissions, and status transitions must never be trusted.
+Customer codes use the PostgreSQL sequence and `CUS-000001` display format. Other document numbers must be generated atomically by a repository or database sequence when each module is implemented. Client-supplied totals, prices, permissions, and status transitions must never be trusted.
+
+## Customer lifecycle
+
+- Customer type is `RETAIL` or `WHOLESALE`; status is `ACTIVE` or `INACTIVE`. Deactivation replaces deletion so transactional attribution remains intact.
+- `defaultSaleType`, `creditTermDays`, and exact `decimal(14,2)` `creditLimit` are separate concepts. Cash customers are normalized to zero credit.
+- `BillingCycle` stores `NONE`, day 15, month end, both, or a custom note. It is configuration only; no scheduler is implemented.
+- Each customer can own multiple `BILLING` and `SHIPPING` addresses. The database permits only one default for each type.
+- `defaultPriceListId` points to an existing active price list during create/update. Product pricing management remains a later module.
+- Customer changes append `CUSTOMER_CREATED`, `CUSTOMER_UPDATED`, `CUSTOMER_DEACTIVATED`, or `CUSTOMER_REACTIVATED` records to the shared `AuditLog`.
 
 ## Migrations
 
@@ -97,4 +107,4 @@ npm run db:deploy
 npm run db:seed
 ```
 
-The baseline migration creates Phase 1 tables and database guards. `20260928010000_authentication_rbac` adds `UserStatus` and the indexed user status column without dropping or resetting data. If an existing database contains unmanaged tables, back it up and reconcile it with `prisma migrate diff` before applying migrations; do not mark a migration as applied unless every object and constraint already exists.
+The baseline migration creates Phase 1 tables and database guards. `20260928010000_authentication_rbac` adds `UserStatus` and the indexed user status column without dropping or resetting data. `20260929000000_customer_management` adds billing-cycle fields and the concurrency-safe customer-code sequence. If an existing database contains unmanaged tables, back it up and reconcile it with `prisma migrate diff` before applying migrations; do not mark a migration as applied unless every object and constraint already exists.

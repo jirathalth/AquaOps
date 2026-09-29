@@ -8,9 +8,9 @@ Foundation completed:
 - [x] Protected routes, API authorization helpers, permission-aware navigation
 - [x] Authentication and RBAC audit events
 
-Business modules remaining:
+Business modules:
 
-- Customers
+- [x] Customers
 - Products
 - Price Lists
 - Sales Orders
