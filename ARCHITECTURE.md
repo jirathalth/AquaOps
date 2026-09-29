@@ -34,7 +34,7 @@ src/features/           Feature-owned UI and business logic
 src/services/           Application use cases
 src/repositories/       Persistence access
 src/lib/                Framework/database/auth utilities
-src/config/             Navigation, status, chart, locale configuration
+src/config/             Navigation, permission/role registries, status, chart, locale configuration
 src/constants/          Stable application constants
 src/types/              Shared domain types
 src/validations/        Zod schemas at input boundaries
@@ -57,12 +57,20 @@ Thai is the default language, English is the fallback. Locale, currency, and tim
 
 ## Service and repository layers
 
-Route handlers and future Server Actions validate transport input, then call services. Services implement authorization and workflows. Repositories contain Prisma queries and never return HTTP responses. The health endpoint is the initial reference path through these layers.
+Route handlers and Server Actions validate transport input, then call services. Services implement authorization and workflows. Repositories contain Prisma queries and never return HTTP responses. Admin user/role actions are the reference mutation path: Zod → server permission guard → service rules/transaction → repository/database.
 
 ## Database strategy
 
 Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. Phase 1 business models use UUIDs, exact decimals, restrictive foreign keys, snapshot fields, an append-only inventory ledger, and invoice/payment allocations as the accounts-receivable source of truth. A singleton client prevents excess development connections. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).
 
-## Authentication strategy
+## Authentication and authorization
 
-Better Auth exposes `/api/auth/[...all]`, a React client, email/password login, logout, session lookup, and the server-only `requireSession()` guard. Protected pages and mutations must call the server guard/service; hiding navigation is never authorization. Roles and permissions are intentionally deferred.
+Better Auth owns `User`, `Session`, `Account`, `Verification`, password hashing, email/password login, logout, and session cookies through `/api/auth/[...all]`. Public self-registration is disabled. New operational users are created by an authorized administrator; temporary passwords are never logged or returned after creation.
+
+The server-only authorization DAL loads the current database session, re-reads user status, active roles, and effective permissions, then deduplicates the union of all role permissions. `requireSession()`, `requirePermission()`, `requireAnyPermission()`, `requireRouteAccess()`, and `authorizeApi()` are the common enforcement points. Server Components check access close to their page data; every Server Action and Route Handler must repeat its own server-side check. Proxy performs only the inexpensive session-cookie redirect and is not a security boundary.
+
+Permission codes use `resource.action` and are defined once in `src/config/permissions.ts`. Route mappings live in `src/config/route-permissions.ts`; navigation reuses permission metadata and removes empty groups. `PermissionProvider`, `Can`, and `usePermission` support lightweight UI visibility, but cannot grant server access.
+
+Roles are database-configurable and additive: `User → UserRole → Role → RolePermission → Permission`. OWNER and ADMIN begin with full access; SALES, ACCOUNTING, WAREHOUSE, DELIVERY, PRODUCTION, and VIEWER receive focused defaults from the idempotent seed. System roles are read-only in normal administration; custom roles can be created, edited, enabled, and assigned permissions.
+
+Inactive users are rejected when Better Auth creates a session and rejected again on every secure access load. Deactivation also revokes existing database sessions. Self-disable, removal of one's own final administrative access, and removal of the final active OWNER/ADMIN account are blocked. Authentication and RBAC mutations create append-only audit records without passwords, hashes, cookies, or tokens.

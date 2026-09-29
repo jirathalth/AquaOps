@@ -1,2 +1,3 @@
 import { PlaceholderPage } from "@/components/shared/placeholder-page";
-export default function Page() { return <PlaceholderPage title="ลูกค้า" section="ฝ่ายขาย" />; }
+import { requireRouteAccess } from "@/services/auth.service";
+export default async function Page() { await requireRouteAccess("/sales/customers"); return <PlaceholderPage title="ลูกค้า" section="ฝ่ายขาย" />; }

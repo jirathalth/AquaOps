@@ -17,6 +17,11 @@ enum RecordStatus {
   INACTIVE
 }
 
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum AddressType {
   BILLING
   SHIPPING
@@ -126,6 +131,7 @@ model User {
   email                     String              @unique
   emailVerified             Boolean             @default(false)
   image                     String?
+  status                    UserStatus          @default(ACTIVE)
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
   sessions                  Session[]
@@ -140,6 +146,7 @@ model User {
   createdBillingNotes       BillingNote[]       @relation("BillingNoteCreatedBy")
   recordedPayments          Payment[]           @relation("PaymentRecordedBy")
 
+  @@index([status])
   @@map("user")
 }
 

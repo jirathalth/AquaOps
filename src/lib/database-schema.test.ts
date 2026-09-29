@@ -7,6 +7,7 @@ const migration = readFileSync(
   resolve(process.cwd(), "prisma/migrations/20260928000000_phase_1_database_architecture/migration.sql"),
   "utf8",
 );
+const authMigration = readFileSync(resolve(process.cwd(), "prisma/migrations/20260928010000_authentication_rbac/migration.sql"), "utf8");
 
 describe("Phase 1 database architecture", () => {
   it.each([
@@ -31,4 +32,9 @@ describe("Phase 1 database architecture", () => {
     expect(migration).toContain('CREATE TRIGGER "payment_allocations_validate"');
     expect(migration).toContain('CREATE UNIQUE INDEX "product_units_one_base_per_product_key"');
   });
+});
+
+describe("Phase 4 authentication schema", () => {
+  it.each(["Role", "Permission", "UserRole", "RolePermission"])("defines the %s model", (model) => { expect(schema).toContain(`model ${model} {`); });
+  it("adds inactive-user enforcement data without resetting existing users", () => { expect(authMigration).toContain('ADD COLUMN "status" "UserStatus" NOT NULL DEFAULT \'ACTIVE\''); expect(authMigration).not.toContain("DROP TABLE"); });
 });

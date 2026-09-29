@@ -2,6 +2,14 @@
 
 ## Phase 1 — Sales & Distribution
 
+Foundation completed:
+
+- [x] Authentication / Users / Roles / Permissions
+- [x] Protected routes, API authorization helpers, permission-aware navigation
+- [x] Authentication and RBAC audit events
+
+Business modules remaining:
+
 - Customers
 - Products
 - Price Lists
@@ -13,7 +21,6 @@
 - Payments
 - Accounts Receivable
 - Reports
-- Users / Roles / Permissions
 - Audit Logs
 
 ## Phase 2 — Factory Operations

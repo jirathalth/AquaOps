@@ -24,7 +24,7 @@ It defines persistence and integrity only. CRUD, workflows, numbering, status tr
 
 | Domain | Main models | Notes |
 | --- | --- | --- |
-| Authentication | `User`, `Session`, `Account`, `Verification` | Owned by Better Auth and preserved without duplicate auth tables |
+| Authentication | `User`, `Session`, `Account`, `Verification` | Owned by Better Auth; `User.status` blocks inactive accounts |
 | Authorization | `Role`, `Permission`, `UserRole`, `RolePermission` | Application RBAC; server-side enforcement is required |
 | Audit | `AuditLog` | Generic append-only before/after history with actor snapshots |
 | Customers | `Customer`, `CustomerAddress` | Retail/wholesale, cash/credit defaults, credit terms, multiple addresses |
@@ -63,6 +63,16 @@ The initial migration adds safeguards that Prisma cannot express directly:
 
 Foreign keys use restrictive deletion for business history. Cascades are limited to owned draft/detail data and Better Auth session/account data.
 
+## Authentication and RBAC integrity
+
+- `User.status` is `ACTIVE` or `INACTIVE` and indexed. Existing users migrate to `ACTIVE` without data reset.
+- `Role.code` and `Permission.code` are unique. Composite primary keys on `UserRole(userId, roleId)` and `RolePermission(roleId, permissionId)` prevent duplicate assignments.
+- Only active roles contribute permissions. Effective permissions are the union of all active assigned roles; no deny rules exist in Phase #4.
+- Better Auth remains the only owner of credential accounts and password hashing. Application RBAC does not duplicate email, password, account, or session data.
+- Users are disabled instead of hard-deleted to preserve document and audit attribution. Disabling a user revokes sessions, while every request also checks current status.
+- System role definitions and permission mappings are synchronized by `npm run db:seed`. Custom roles remain database-managed.
+- Login/logout, user status/profile changes, role assignment/removal, role changes, and permission changes write to the existing immutable `AuditLog`. Credentials and session secrets are excluded.
+
 ## Required service transactions
 
 Future services must use Prisma interactive transactions for these operations:
@@ -84,6 +94,7 @@ npm run db:validate
 npm run db:generate
 npm run db:migrate -- --name <change_name>
 npm run db:deploy
+npm run db:seed
 ```
 
-The committed migration is a baseline from an empty PostgreSQL database. If an existing database contains unmanaged tables, back it up and reconcile it with `prisma migrate diff` before applying this baseline; do not mark the migration as applied unless every object and constraint already exists.
+The baseline migration creates Phase 1 tables and database guards. `20260928010000_authentication_rbac` adds `UserStatus` and the indexed user status column without dropping or resetting data. If an existing database contains unmanaged tables, back it up and reconcile it with `prisma migrate diff` before applying migrations; do not mark a migration as applied unless every object and constraint already exists.

@@ -1,2 +1,3 @@
 import { PlaceholderPage } from "@/components/shared/placeholder-page";
-export default function Page() { return <PlaceholderPage title="รายงาน" section="AquaOps" />; }
+import { requireRouteAccess } from "@/services/auth.service";
+export default async function Page() { await requireRouteAccess("/reports"); return <PlaceholderPage title="รายงาน" section="AquaOps" />; }

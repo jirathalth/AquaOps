@@ -1,0 +1,1 @@
+export function getSafeReturnTo(value: string | string[] | undefined, fallback = "/dashboard"): string { const path = Array.isArray(value) ? value[0] : value; return path && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/login") ? path : fallback; }
