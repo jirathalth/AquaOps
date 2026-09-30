@@ -1,0 +1,6 @@
+export type WarehouseOption = { id: string; code: string; name: string; status: "ACTIVE" | "INACTIVE"; isDefault: boolean };
+export type InventoryProductOption = { id: string; productId: string; sku: string; name: string; barcode: string; unitName: string; unitSymbol: string; decimalScale: number };
+export type WarehouseRow = WarehouseOption & { balanceCount: number; movementCount: number; createdAt: string; updatedAt: string };
+export type StockStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
+export type StockRow = { id: string; productId: string; sku: string; barcode: string; productName: string; productStatus: "ACTIVE" | "INACTIVE"; categoryId: string | null; categoryName: string | null; warehouseId: string; warehouseName: string; unitName: string; unitSymbol: string; quantity: string; reservedQuantity: string; minimumStock: string; status: StockStatus; lastMovementAt: string | null; updatedAt: string };
+export type MovementRow = { id: string; movementId: string; movementNo: string; occurredAt: string; productId: string; sku: string; productName: string; warehouseId: string; warehouseName: string; unitName: string; unitSymbol: string; type: "OPENING" | "RECEIPT" | "ISSUE" | "TRANSFER" | "ADJUSTMENT" | "SALE" | "DELIVERY" | "RETURN"; quantity: string; referenceType: string | null; referenceId: string | null; userName: string; note: string | null };

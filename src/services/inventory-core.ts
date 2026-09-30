@@ -1,0 +1,10 @@
+export type InventoryDirection = "IN" | "OUT";
+
+function scaled(value: string, scale = 3) { const match = value.trim().match(/^(\d+)(?:\.(\d+))?$/); if (!match) throw new Error("จำนวนไม่ถูกต้อง"); const fraction = (match[2] ?? "").padEnd(scale, "0"); if (fraction.length > scale && /[1-9]/.test(fraction.slice(scale))) throw new Error(`จำนวนต้องมีทศนิยมไม่เกิน ${scale} ตำแหน่ง`); return BigInt(match[1]!) * 10n ** BigInt(scale) + BigInt(fraction.slice(0, scale) || "0"); }
+function fixed(value: bigint, scale = 3) { const negative = value < 0; const absolute = negative ? -value : value; const digits = absolute.toString().padStart(scale + 1, "0"); return `${negative ? "-" : ""}${digits.slice(0, -scale)}.${digits.slice(-scale)}`; }
+export function normalizeInventoryQuantity(value: string, scale = 3) { return fixed(scaled(value, scale), scale); }
+export function signedInventoryQuantity(value: string, direction: InventoryDirection) { const normalized = normalizeInventoryQuantity(value); if (normalized === "0.000") throw new Error("จำนวนต้องมากกว่า 0"); return direction === "OUT" ? `-${normalized}` : normalized; }
+export function compareInventoryQuantity(left: string, right: string) { const a = scaled(left); const b = scaled(right); return a === b ? 0 : a > b ? 1 : -1; }
+export function addInventoryQuantities(left: string, right: string) { const parseSigned = (value: string) => value.startsWith("-") ? -scaled(value.slice(1)) : scaled(value); return fixed(parseSigned(left) + parseSigned(right)); }
+export function validateInventoryUnitScale(value: string, decimalScale: number) { const fraction = value.split(".")[1] ?? ""; if (fraction.length > decimalScale && /[1-9]/.test(fraction.slice(decimalScale))) throw new Error(`หน่วยนี้รองรับทศนิยมไม่เกิน ${decimalScale} ตำแหน่ง`); return normalizeInventoryQuantity(value); }
+export function getStockStatus(quantity: string, minimumStock: string) { if (compareInventoryQuantity(quantity, "0") <= 0) return "OUT_OF_STOCK" as const; return compareInventoryQuantity(quantity, minimumStock) <= 0 ? "LOW_STOCK" as const : "IN_STOCK" as const; }

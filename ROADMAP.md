@@ -11,11 +11,11 @@ Foundation completed:
 Business modules:
 
 - [x] Customers
-- Products
-- Price Lists
-- Sales Orders
-- Inventory
-- Delivery
+- [x] Products / Categories / Units
+- [x] Price Lists / Customer-specific pricing
+- [x] Sales Orders
+- [x] Inventory (ledger, balances, warehouses, adjustments, transfers, movement history)
+- [x] Delivery (planning, loading, dispatch, result, vehicle stock, return)
 - Invoices
 - Billing
 - Payments

@@ -61,6 +61,14 @@ Route handlers and Server Actions validate transport input, then call services. 
 
 Customer Management follows the same boundary: Server Components load paginated query results, the feature-owned React Hook Form sends plain values to Server Actions, `customer.service` applies normalization and transaction rules, and `customer.repository` is the only layer that queries Prisma. Customer, address replacement, sequence-generated code, and audit writes share one interactive transaction. Currency inputs stay decimal strings until Prisma/PostgreSQL persistence.
 
+Product and pricing modules use the same path through `features/products|pricing`, focused services, and focused repositories. Product/category/unit mutations and all price changes write audit events in their database transaction. `pricing.service` is the single pricing resolver used by current preview and future order services; UI components never implement pricing precedence.
+
+Sales orders follow `features/sales-orders → sales-order.service → sales-order.repository`. The UI submits customer/product references and operator inputs only; the service reloads active master data, calls the centralized pricing resolver, creates customer/product/unit/price snapshots, recalculates all totals with fixed-decimal domain logic, and persists the order, items, history, numbering, and audit records in one transaction. Server Actions repeat authentication, permission, and Zod validation for every mutation.
+
+Inventory follows `features/inventory → inventory.service → inventory.repository`. `recordInventoryMovement` is the controlled posting boundary. The service validates active warehouses and base product units, normalizes quantities with fixed-decimal helpers, generates `STK-YYYYMM-00001` numbers from `DocumentSequence`, and appends signed ledger entries. Adjustment and transfer audits share the same serializable transaction as the movement. UI code never updates balances.
+
+Delivery follows `features/delivery → delivery.service → delivery.repository`. The service owns trip numbering and lifecycle, order assignment, sequence, Sales Order histories, delivery outcomes, returns, and audit orchestration. Critical actions use one serializable transaction and call the centralized inventory batch posting boundary; React components and Server Actions never create ledger rows or update balances. The existing `DeliveryStop → Delivery → DeliveryItem` structure represents ordered trip stops and their Sales Orders, so no competing `DeliveryTripOrder` model is introduced.
+
 ## Database strategy
 
 Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. Phase 1 business models use UUIDs, exact decimals, restrictive foreign keys, snapshot fields, an append-only inventory ledger, and invoice/payment allocations as the accounts-receivable source of truth. A singleton client prevents excess development connections. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).
@@ -76,3 +84,41 @@ Permission codes use `resource.action` and are defined once in `src/config/permi
 Roles are database-configurable and additive: `User → UserRole → Role → RolePermission → Permission`. OWNER and ADMIN begin with full access; SALES, ACCOUNTING, WAREHOUSE, DELIVERY, PRODUCTION, and VIEWER receive focused defaults from the idempotent seed. System roles are read-only in normal administration; custom roles can be created, edited, enabled, and assigned permissions.
 
 Inactive users are rejected when Better Auth creates a session and rejected again on every secure access load. Deactivation also revokes existing database sessions. Self-disable, removal of one's own final administrative access, and removal of the final active OWNER/ADMIN account are blocked. Authentication and RBAC mutations create append-only audit records without passwords, hashes, cookies, or tokens.
+
+## Product and pricing
+
+- Product SKU and optional barcode are normalized and unique. SKU is entered by the operator in this phase; no competing number sequence is introduced.
+- Each product begins with one immutable base-unit assignment. The schema remains compatible with additional selling units, but conversion workflows are deferred.
+- Unit cost, retail price, wholesale price, list prices, and customer prices stay exact decimal strings until Prisma/PostgreSQL persistence.
+- Effective pricing is resolved centrally: active customer override, then active/valid customer default price list and quantity tier, then retail/wholesale product default according to customer type.
+- Cost visibility currently follows `product.update`; a dedicated cost permission can be added when costing workflows are implemented.
+- Configuration changes affect only new transactions. Future orders and invoices store price snapshots and are never rewritten by master-price changes.
+
+## Sales orders
+
+- Monthly order numbers use an atomically incremented `DocumentSequence` key and the format `SO-YYYYMM-00001`; no `MAX + 1` query is used.
+- Draft creation and editing resolve `CustomerProductPrice → PriceListItem → ProductUnit default`, then preserve the resolved and final unit prices plus source and override metadata.
+- The calculation engine rounds line gross values to two decimals, applies line discounts, allocates the document discount proportionally, then calculates exclusive line tax from the discounted taxable base. The server always recalculates persisted totals.
+- Customer code/name, credit term/limit, product name, SKU, unit name, conversion factor, and prices are transaction snapshots. Cash orders snapshot zero credit; credit orders snapshot the customer's current terms.
+- Phase #7 owns `DRAFT → CONFIRMED`, `DRAFT → CANCELLED`, and `CONFIRMED → CANCELLED`. Phase #9 Delivery owns `PREPARING`, `READY`, `DELIVERING`, and `DELIVERED` transitions with status history.
+- Confirmation validates authoritative draft data and writes status history/audit atomically. **It does not reserve or deduct inventory in Phase #7.** Credit-limit enforcement is deferred until reliable invoice/payment-derived AR exists.
+
+## Inventory
+
+- **InventoryTransaction is the authoritative stock movement history.** AquaOps retains the Phase #3 names: `InventoryMovement` is the logical header and signed `InventoryLedgerEntry` rows are the authoritative quantity ledger.
+- **InventoryBalance is a derived operational projection and must remain consistent with the ledger.** The existing model is named `StockBalance`; PostgreSQL updates it from ledger insert triggers in the same transaction.
+- Quantities are base-unit `decimal(14,3)` values. A positive ledger quantity increases stock and a negative quantity reduces it; movement type and sign are not competing direction sources.
+- Negative available stock is forbidden. A conditional database update locks the balance row and succeeds only when `onHand + delta >= reserved`; serializable service transactions handle wider write conflicts. This prevents two concurrent reductions from both consuming the same stock.
+- A transfer is one `InventoryMovement` with a negative source entry and positive destination entry. Both entries, projection updates, and the business audit commit or roll back together.
+- Movement headers and ledger rows are immutable. Corrections append a compensating movement. `checkInventoryIntegrity()` compares ledger sums with the balance projection; rebuild is an explicit maintenance operation, never part of request handling.
+- Warehouse management uses activation status rather than deletion. Inactive warehouses remain visible historically and are rejected for new postings.
+- Sales Order confirmation still does not reserve or deduct stock. Delivery loading is the physical issue point; current quantity remains distinct from available-to-promise because confirmed orders are not reserved.
+
+## Delivery
+
+- Monthly trip numbers use `DocumentSequence` with `DL-YYYYMM-00001`; no `MAX + 1` query is used.
+- The established trip lifecycle remains `PLANNED → LOADING → IN_TRANSIT → COMPLETED`, with safe cancellation from `PLANNED` or `LOADING`. `IN_TRANSIT` is the schema-level equivalent of dispatched.
+- Assigning a confirmed order moves it to `PREPARING`. Atomic loading transfers all required base-unit quantities from the order source warehouse to the selected vehicle warehouse and moves orders to `READY`. Dispatch moves orders to `DELIVERING`.
+- Successful delivery posts one idempotent `SALE` movement from the vehicle warehouse and moves the order to `DELIVERED`. Delivery does not move the order to `COMPLETED`; invoicing/payment phases may own that future rule.
+- Failed delivery does not post a sale. Stock remains in the vehicle warehouse until the explicit idempotent return transfers it to the source warehouse, after which the order returns to `READY` for re-delivery. A trip cannot complete while failed stock remains unreturned.
+- Sales Orders use their persisted shipping-address snapshot. Customer master-data changes never rewrite an assigned delivery destination.

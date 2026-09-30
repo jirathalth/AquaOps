@@ -1,6 +1,6 @@
 # AquaOps
 
-ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม ปัจจุบันมี technical foundation, UI shell, Phase 1 database architecture, Authentication/RBAC และ Customer Management แล้ว
+ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม ปัจจุบันมี technical foundation, UI shell, Phase 1 database architecture, Authentication/RBAC, Customer Management, Product/Pricing Management, Sales Order Management, Inventory Management และ Delivery Management แล้ว
 
 ## Requirements
 
@@ -36,7 +36,7 @@ npm run db:deploy
 npm run db:seed
 ```
 
-Seed ทำงานแบบ idempotent สำหรับ permissions, system roles และ role-permission mappings โดยไม่เก็บรหัสผ่านไว้ใน source code เมื่อเปิด development seed จะสร้างราคาขายและข้อมูลลูกค้าตัวอย่างทั้งปลีก/ส่ง เงินสด/เครดิต ที่อยู่หลายประเภท และสถานะ active/inactive
+Seed ทำงานแบบ idempotent สำหรับ permissions, system roles และ role-permission mappings โดยไม่เก็บรหัสผ่านไว้ใน source code เมื่อเปิด development seed จะสร้างลูกค้าตัวอย่าง หมวดหมู่ หน่วย สินค้า 10+ รายการ รายการราคา และราคาพิเศษลูกค้า
 
 Prisma schema ครอบคลุมฐานข้อมูล Phase 1, Better Auth, RBAC และ audit history แล้ว ดูรายละเอียดและ transaction rules ที่ [DATABASE.md](./DATABASE.md)
 
@@ -58,6 +58,18 @@ npm run dev
 
 Customer Management อยู่ที่ `/customers` รองรับการค้นหา/กรอง/เรียง/แบ่งหน้าแบบ server-side, เพิ่ม แก้ไข ดูรายละเอียด ที่อยู่หลายรายการ เงื่อนไขเครดิต ราคาขาย รอบวางบิล และเปิด/ปิดใช้งานตาม RBAC
 
+Product Management อยู่ที่ `/inventory/products` และ Price List Management อยู่ที่ `/price-lists` รองรับข้อมูลสินค้า หมวดหมู่ หน่วย ราคามาตรฐาน รายการราคา ราคาพิเศษลูกค้า และ pricing preview ตามลำดับ `Customer Override → Customer Price List → Product Default`
+
+Sales Order Management อยู่ที่ `/sales/orders` รองรับรายการแบบ server-side, สร้าง/แก้ไขฉบับร่าง, pricing snapshot, ส่วนลด/ภาษีแบบ Decimal-safe, ยืนยันและยกเลิกตาม RBAC พร้อม status history และ audit log การยืนยันคำสั่งซื้อใน Phase #7 **ไม่จองหรือตัดสต็อก**
+
+Inventory Management อยู่ที่ `/inventory/stock`, `/inventory/movements` และ `/inventory/warehouses` รองรับยอดคงเหลือ ประวัติแบบ immutable การปรับปรุง และการโอนย้ายระหว่างคลังแบบ atomic ตามสิทธิ์ `inventory.view`, `inventory.adjust`, `inventory.transfer` และ `inventory.manage_warehouse` จำนวนสต็อกใช้ Decimal และหน่วยหลักของสินค้า
+
+Delivery Management อยู่ที่ `/delivery`, `/delivery/trips` และ `/delivery/vehicles` รองรับการวางแผนรอบ เพิ่ม/นำคำสั่งซื้อออก จัดลำดับ ขึ้นสินค้า ออกรถ บันทึกผล คืนสินค้าที่จัดส่งไม่สำเร็จ และจบรอบตามสิทธิ์ `delivery.view` / `delivery.manage` ที่อยู่จัดส่งใช้ snapshot จาก Sales Order เสมอ การขึ้นสินค้าโอน `คลังต้นทาง → คลังรถ`, การจัดส่งสำเร็จตัด `SALE` จากคลังรถ และรายการที่ไม่สำเร็จต้องคืน `คลังรถ → คลังต้นทาง` ก่อนจบรอบ
+
+**InventoryTransaction is the authoritative stock movement history.** ใน schema ปัจจุบันแนวคิดนี้ประกอบด้วย `InventoryMovement` (หัวรายการ) และ signed `InventoryLedgerEntry` (รายการที่มีผลต่อสต็อก) ส่วน **InventoryBalance is a derived operational projection and must remain consistent with the ledger.** โดย model ที่ใช้ชื่อ `StockBalance` และอัปเดตด้วย database trigger ใน transaction เดียวกับ ledger เท่านั้น
+
+ระบบไม่อนุญาตให้สต็อกพร้อมใช้ติดลบ รายการที่ลงบัญชีแล้วแก้ไข/ลบไม่ได้ และต้องแก้ด้วย compensating movement การยืนยัน Sales Order ยังไม่จองหรือตัดสต็อก จุดตัดสินค้าครั้งแรกคือการขึ้นสินค้าของรอบจัดส่ง ดังนั้น Current Quantity ยังไม่ใช่ Available-to-Promise
+
 ในโหมดพัฒนา เปิด `/dev/ui` เพื่อตรวจสอบ typography, forms, statuses, tables และ interaction patterns ของ design system หน้านี้คืนค่า 404 ใน production
 
 ## Quality and tests
@@ -66,10 +78,19 @@ Customer Management อยู่ที่ `/customers` รองรับกา�
 npm run lint
 npm run typecheck
 npm run test
+npm run test:inventory-db
+npm run test:delivery-db
 npm run test:e2e
+npm run test:e2e:delivery
 ```
 
 E2E ที่ต้องเข้าสู่ระบบใช้ฐานข้อมูลทดสอบที่ seed แล้ว และอ่าน credentials จาก `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`, `E2E_RESTRICTED_EMAIL`, `E2E_RESTRICTED_PASSWORD`; ชุดทดสอบดังกล่าวจะ skip พร้อมเหตุผลเมื่อไม่ได้กำหนดค่า
+
+`npm run test:inventory-db` สร้างฐานข้อมูลชั่วคราวจาก `DATABASE_URL`, deploy migrations, ทดสอบ atomicity/concurrency/immutability/reconciliation แล้วลบฐานข้อมูลทิ้ง
+
+`npm run test:delivery-db` สร้างฐานข้อมูลชั่วคราว ทดสอบ migration/seed แบบ idempotent และตรวจ workflow ขึ้นสินค้า ออกรถ จัดส่งสำเร็จ จัดส่งไม่สำเร็จ คืนสินค้า และการป้องกัน movement ซ้ำ
+
+`npm run test:e2e:delivery` สร้างฐานข้อมูลชั่วคราวและตรวจ workflow จัดส่งหลักใน Chromium ทั้งเดสก์ท็อปและมือถือ โดยไม่เปลี่ยนข้อมูลฐานพัฒนาหลัก
 
 ติดตั้ง Playwright browser ครั้งแรกด้วย `npx playwright install chromium` หากเครื่องยังไม่มี browser binary
 

@@ -5,6 +5,7 @@ import { hashPassword } from "better-auth/crypto";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { permissionRegistry } from "../src/config/permissions";
 import { defaultRolePermissions, systemRoles, type SystemRoleCode } from "../src/config/roles";
+import { calculateSalesOrderTotals } from "../src/services/sales-order-core";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required to seed AquaOps");
@@ -50,6 +51,7 @@ async function seedCustomerData() {
     { code: "CUS-000002", type: "WHOLESALE" as const, status: "ACTIVE" as const, legalName: "บริษัท น้ำใส มาร์เก็ต จำกัด", displayName: "น้ำใส มาร์เก็ต", taxId: "0105569000001", taxBranchCode: "00000", contactName: "อรทัย ฝ่ายขาย", phone: "02-123-4567", email: "purchasing@namsai.example.test", defaultSaleType: "CREDIT" as const, creditLimit: "100000.00", creditTermDays: 30, billingCycle: "END_OF_MONTH" as const, defaultPriceListId: priceListIds.get("WHOLESALE-A"), notes: "ลูกค้าส่งเครดิตตัวอย่าง", addresses: [{ type: "BILLING" as const, label: "สำนักงานใหญ่", addressLine1: "88 ถนนรัชดาภิเษก", subdistrict: "ดินแดง", district: "ดินแดง", province: "กรุงเทพมหานคร", postalCode: "10400", countryCode: "TH", isDefault: true }, { type: "SHIPPING" as const, label: "คลังสินค้า", addressLine1: "55/5 ถนนบางนา-ตราด", subdistrict: "บางแก้ว", district: "บางพลี", province: "สมุทรปราการ", postalCode: "10540", countryCode: "TH", isDefault: true }] },
     { code: "CUS-000003", type: "WHOLESALE" as const, status: "ACTIVE" as const, legalName: "ร้านโชคดี", displayName: "ร้านโชคดี", contactName: "คุณนิด", phone: "089-555-0101", defaultSaleType: "CREDIT" as const, creditLimit: "30000.00", creditTermDays: 15, billingCycle: "DAY_15_AND_END_OF_MONTH" as const, defaultPriceListId: priceListIds.get("WHOLESALE-B"), notes: null, addresses: [{ type: "BILLING" as const, label: "หน้าร้าน", addressLine1: "12 ตลาดสดเทศบาล", district: "เมือง", province: "นนทบุรี", postalCode: "11000", countryCode: "TH", isDefault: true }] },
     { code: "CUS-000004", type: "RETAIL" as const, status: "INACTIVE" as const, legalName: "ลูกค้าตัวอย่าง ไม่ใช้งาน", displayName: "ลูกค้าตัวอย่าง ไม่ใช้งาน", phone: "080-000-0004", defaultSaleType: "CASH" as const, creditLimit: "0.00", creditTermDays: 0, billingCycle: "NONE" as const, defaultPriceListId: priceListIds.get("RETAIL"), notes: "ใช้ตรวจสอบตัวกรองสถานะ", addresses: [] },
+    { code: "CUS-000005", type: "RETAIL" as const, status: "ACTIVE" as const, legalName: "ลูกค้าราคามาตรฐาน", displayName: "ลูกค้าราคามาตรฐาน", phone: "080-000-0005", defaultSaleType: "CASH" as const, creditLimit: "0.00", creditTermDays: 0, billingCycle: "NONE" as const, defaultPriceListId: null, notes: "ใช้ตรวจสอบราคามาตรฐานสินค้า", addresses: [{ type: "SHIPPING" as const, label: "บ้าน", addressLine1: "101 ถนนตัวอย่าง", district: "เมือง", province: "กรุงเทพมหานคร", postalCode: "10000", countryCode: "TH", isDefault: true }] },
   ];
   for (const { addresses, ...data } of customers) {
     const customer = await db.customer.upsert({ where: { code: data.code }, update: data, create: data });
@@ -57,6 +59,109 @@ async function seedCustomerData() {
     if (addresses.length) await db.customerAddress.createMany({ data: addresses.map((address) => ({ customerId: customer.id, ...address })) });
   }
   await db.$executeRaw`SELECT setval('customer_code_seq', GREATEST((SELECT COALESCE(MAX(SUBSTRING("code" FROM 5)::BIGINT), 0) FROM "customers" WHERE "code" ~ '^CUS-[0-9]+$'), 1), true)`;
+}
+
+async function seedCatalogPricing() {
+  const categoryDefinitions = [
+    { code: "DRINKING_WATER", name: "น้ำดื่ม" },
+    { code: "LARGE_BOTTLE", name: "ถังและขวดขนาดใหญ่" },
+    { code: "PACKAGING", name: "บรรจุภัณฑ์" },
+  ];
+  const categories = new Map<string, string>();
+  for (const definition of categoryDefinitions) { const category = await db.productCategory.upsert({ where: { code: definition.code }, update: { ...definition, isActive: true }, create: definition }); categories.set(definition.code, category.id); }
+  const unitDefinitions = [
+    { code: "BOTTLE", nameTh: "ขวด", nameEn: "Bottle", symbol: "ขวด" },
+    { code: "PACK", nameTh: "แพ็ก", nameEn: "Pack", symbol: "แพ็ก" },
+    { code: "CARTON", nameTh: "ลัง", nameEn: "Carton", symbol: "ลัง" },
+    { code: "TANK", nameTh: "ถัง", nameEn: "Tank", symbol: "ถัง" },
+  ];
+  const units = new Map<string, string>();
+  for (const definition of unitDefinitions) { const unit = await db.unitOfMeasure.upsert({ where: { code: definition.code }, update: { ...definition, decimalScale: 0, isActive: true }, create: { ...definition, decimalScale: 0 } }); units.set(definition.code, unit.id); }
+  const products = [
+    { sku: "WATER-350-PACK", name: "น้ำดื่ม 350 มล. แพ็ก 12 ขวด", category: "DRINKING_WATER", unit: "PACK", barcode: "8850000000011", cost: "28.5000", retail: "45.0000", wholesale: "38.0000", reorder: "30.000" },
+    { sku: "WATER-600-PACK", name: "น้ำดื่ม 600 มล. แพ็ก 12 ขวด", category: "DRINKING_WATER", unit: "PACK", barcode: "8850000000028", cost: "34.0000", retail: "55.0000", wholesale: "47.0000", reorder: "40.000" },
+    { sku: "WATER-1500-PACK", name: "น้ำดื่ม 1.5 ลิตร แพ็ก 6 ขวด", category: "DRINKING_WATER", unit: "PACK", barcode: "8850000000035", cost: "39.0000", retail: "60.0000", wholesale: "52.0000", reorder: "25.000" },
+    { sku: "WATER-350-BOTTLE", name: "น้ำดื่ม 350 มล.", category: "DRINKING_WATER", unit: "BOTTLE", barcode: "8850000000042", cost: "2.4000", retail: "5.0000", wholesale: "3.5000", reorder: "120.000" },
+    { sku: "WATER-600-BOTTLE", name: "น้ำดื่ม 600 มล.", category: "DRINKING_WATER", unit: "BOTTLE", barcode: "8850000000059", cost: "2.9000", retail: "7.0000", wholesale: "4.5000", reorder: "120.000" },
+    { sku: "WATER-1500-BOTTLE", name: "น้ำดื่ม 1.5 ลิตร", category: "DRINKING_WATER", unit: "BOTTLE", barcode: "8850000000066", cost: "6.0000", retail: "12.0000", wholesale: "9.0000", reorder: "60.000" },
+    { sku: "WATER-5L-BOTTLE", name: "น้ำดื่ม 5 ลิตร", category: "LARGE_BOTTLE", unit: "BOTTLE", barcode: "8850000000073", cost: "16.0000", retail: "30.0000", wholesale: "25.0000", reorder: "30.000" },
+    { sku: "WATER-18L-TANK", name: "น้ำดื่มถัง 18.9 ลิตร", category: "LARGE_BOTTLE", unit: "TANK", barcode: "8850000000080", cost: "18.0000", retail: "45.0000", wholesale: "38.0000", reorder: "40.000" },
+    { sku: "EMPTY-18L-TANK", name: "ถังเปล่า 18.9 ลิตร", category: "PACKAGING", unit: "TANK", barcode: "8850000000097", cost: "120.0000", retail: "180.0000", wholesale: "160.0000", reorder: "15.000" },
+    { sku: "CUP-220-CARTON", name: "น้ำดื่มถ้วย 220 มล. ลัง 48 ถ้วย", category: "DRINKING_WATER", unit: "CARTON", barcode: "8850000000103", cost: "72.0000", retail: "105.0000", wholesale: "92.0000", reorder: "20.000" },
+    { sku: "CARTON-600", name: "กล่องลูกฟูกสำหรับน้ำ 600 มล.", category: "PACKAGING", unit: "CARTON", barcode: "8850000000110", cost: "8.0000", retail: "12.0000", wholesale: "10.0000", reorder: "50.000" },
+  ];
+  const productUnits = new Map<string, string>();
+  for (const definition of products) {
+    const product = await db.product.upsert({ where: { sku: definition.sku }, update: { name: definition.name, categoryId: categories.get(definition.category), status: "ACTIVE", trackInventory: true, reorderLevel: definition.reorder }, create: { sku: definition.sku, name: definition.name, categoryId: categories.get(definition.category), reorderLevel: definition.reorder } });
+    const unitId = units.get(definition.unit)!;
+    const productUnit = await db.productUnit.upsert({ where: { productId_unitId: { productId: product.id, unitId } }, update: { barcode: definition.barcode, cost: definition.cost, retailPrice: definition.retail, wholesalePrice: definition.wholesale, conversionFactor: "1.000000", isBase: true, isActive: true }, create: { productId: product.id, unitId, barcode: definition.barcode, cost: definition.cost, retailPrice: definition.retail, wholesalePrice: definition.wholesale, conversionFactor: "1.000000", isBase: true } });
+    productUnits.set(definition.sku, productUnit.id);
+  }
+  const priceFactors: Record<string, string> = { RETAIL: "1.0000", "WHOLESALE-A": "0.9000", "WHOLESALE-B": "0.9400", DEALER: "0.8500" };
+  for (const [code, factor] of Object.entries(priceFactors)) {
+    const priceList = await db.priceList.findUniqueOrThrow({ where: { code }, select: { id: true } });
+    for (const definition of products) {
+      const defaultPrice = code === "RETAIL" ? definition.retail : definition.wholesale;
+      const cents = BigInt(defaultPrice.replace(".", ""));
+      const multiplier = BigInt(factor.replace(".", ""));
+      const unitPrice = `${(cents * multiplier) / 10000n}`.padStart(5, "0").replace(/(\d{4})$/, ".$1");
+      const productUnitId = productUnits.get(definition.sku)!;
+      await db.priceListItem.upsert({ where: { priceListId_productUnitId_minimumQuantity: { priceListId: priceList.id, productUnitId, minimumQuantity: "1.000" } }, update: { unitPrice }, create: { priceListId: priceList.id, productUnitId, minimumQuantity: "1.000", unitPrice } });
+    }
+  }
+  const customer = await db.customer.findUniqueOrThrow({ where: { code: "CUS-000002" }, select: { id: true } });
+  const productUnitId = productUnits.get("WATER-600-PACK")!;
+  const validFrom = new Date("2026-01-01T00:00:00.000+07:00");
+  await db.customerProductPrice.upsert({ where: { customerId_productUnitId_validFrom: { customerId: customer.id, productUnitId, validFrom } }, update: { unitPrice: "42.5000", validTo: null }, create: { customerId: customer.id, productUnitId, unitPrice: "42.5000", validFrom } });
+}
+
+async function seedSalesOrders() {
+  const warehouse = await db.warehouse.upsert({ where: { code: "MAIN" }, update: { name: "คลังสินค้าหลัก", type: "STORAGE", status: "ACTIVE", isDefault: true }, create: { code: "MAIN", name: "คลังสินค้าหลัก", type: "STORAGE", status: "ACTIVE", isDefault: true } });
+  const customers = await db.customer.findMany({ where: { code: { in: ["CUS-000001", "CUS-000002", "CUS-000003", "CUS-000005"] } }, select: { id: true, code: true, displayName: true, defaultPriceListId: true, creditTermDays: true, creditLimit: true, defaultSaleType: true, addresses: { orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] } } });
+  const customerByCode = new Map(customers.map((customer) => [customer.code, customer]));
+  const units = await db.productUnit.findMany({ where: { product: { sku: { in: ["WATER-350-PACK", "WATER-600-PACK", "WATER-1500-PACK", "WATER-18L-TANK"] } } }, include: { product: true, unit: true } });
+  const unitBySku = new Map(units.map((unit) => [unit.product.sku, unit]));
+  const definitions = [
+    { orderNo: "SO-202609-00001", customer: "CUS-000001", status: "DRAFT" as const, discount: "0.00", lines: [{ sku: "WATER-350-PACK", quantity: "2.000", price: "45.0000", source: "PRICE_LIST", discount: "0.00", tax: "7.00" }] },
+    { orderNo: "SO-202609-00002", customer: "CUS-000002", status: "CONFIRMED" as const, discount: "20.00", lines: [{ sku: "WATER-600-PACK", quantity: "10.000", price: "42.5000", source: "CUSTOMER_OVERRIDE", discount: "10.00", tax: "7.00" }, { sku: "WATER-1500-PACK", quantity: "5.000", price: "46.8000", source: "PRICE_LIST", discount: "0.00", tax: "7.00" }] },
+    { orderNo: "SO-202609-00003", customer: "CUS-000003", status: "DRAFT" as const, discount: "15.00", lines: [{ sku: "WATER-18L-TANK", quantity: "8.000", price: "35.7200", source: "PRICE_LIST", discount: "5.00", tax: "7.00" }] },
+    { orderNo: "SO-202609-00004", customer: "CUS-000005", status: "CONFIRMED" as const, discount: "0.00", lines: [{ sku: "WATER-350-PACK", quantity: "3.000", price: "45.0000", source: "PRODUCT_DEFAULT", discount: "0.00", tax: "0.00" }] },
+    { orderNo: "SO-202609-00005", customer: "CUS-000001", status: "CANCELLED" as const, discount: "0.00", lines: [{ sku: "WATER-600-PACK", quantity: "1.000", price: "55.0000", source: "PRICE_LIST", discount: "0.00", tax: "7.00" }] },
+  ];
+  for (const definition of definitions) {
+    const customer = customerByCode.get(definition.customer)!;
+    const shippingAddress = customer.addresses.find((address) => address.type === "SHIPPING" && address.isDefault) ?? customer.addresses.find((address) => address.type === "SHIPPING") ?? customer.addresses[0];
+    const totals = calculateSalesOrderTotals(definition.lines.map((line) => ({ quantity: line.quantity, unitPrice: line.price, discountAmount: line.discount, taxRate: line.tax })), definition.discount);
+    const addressSnapshot = shippingAddress ? { label: shippingAddress.label, contactName: shippingAddress.contactName, phone: shippingAddress.phone, addressLine1: shippingAddress.addressLine1, addressLine2: shippingAddress.addressLine2, subdistrict: shippingAddress.subdistrict, district: shippingAddress.district, province: shippingAddress.province, postalCode: shippingAddress.postalCode, countryCode: shippingAddress.countryCode, deliveryNotes: shippingAddress.deliveryNotes } : undefined;
+    const order = await db.salesOrder.upsert({ where: { orderNo: definition.orderNo }, update: { customerId: customer.id, warehouseId: warehouse.id, priceListId: customer.defaultPriceListId, status: definition.status, saleType: customer.defaultSaleType, customerCodeSnapshot: customer.code, customerNameSnapshot: customer.displayName, creditTermDaysSnapshot: customer.defaultSaleType === "CREDIT" ? customer.creditTermDays : 0, creditLimitSnapshot: customer.defaultSaleType === "CREDIT" ? customer.creditLimit : "0.00", orderDate: new Date("2026-09-30T00:00:00+07:00"), shippingAddress: addressSnapshot, subtotal: totals.subtotal, documentDiscountAmount: totals.documentDiscountAmount, discountAmount: totals.discountAmount, taxAmount: totals.taxAmount, totalAmount: totals.totalAmount, confirmedAt: definition.status === "CONFIRMED" ? new Date("2026-09-30T09:00:00+07:00") : null, cancelledAt: definition.status === "CANCELLED" ? new Date("2026-09-30T10:00:00+07:00") : null }, create: { orderNo: definition.orderNo, customerId: customer.id, warehouseId: warehouse.id, priceListId: customer.defaultPriceListId, status: definition.status, saleType: customer.defaultSaleType, customerCodeSnapshot: customer.code, customerNameSnapshot: customer.displayName, creditTermDaysSnapshot: customer.defaultSaleType === "CREDIT" ? customer.creditTermDays : 0, creditLimitSnapshot: customer.defaultSaleType === "CREDIT" ? customer.creditLimit : "0.00", orderDate: new Date("2026-09-30T00:00:00+07:00"), shippingAddress: addressSnapshot, subtotal: totals.subtotal, documentDiscountAmount: totals.documentDiscountAmount, discountAmount: totals.discountAmount, taxAmount: totals.taxAmount, totalAmount: totals.totalAmount, confirmedAt: definition.status === "CONFIRMED" ? new Date("2026-09-30T09:00:00+07:00") : null, cancelledAt: definition.status === "CANCELLED" ? new Date("2026-09-30T10:00:00+07:00") : null } });
+    await db.salesOrderItem.deleteMany({ where: { salesOrderId: order.id } });
+    await db.salesOrderItem.createMany({ data: definition.lines.map((line, index) => { const unit = unitBySku.get(line.sku)!; return { salesOrderId: order.id, lineNo: index + 1, productId: unit.productId, productUnitId: unit.id, sku: unit.product.sku, description: unit.product.name, productNameSnapshot: unit.product.name, skuSnapshot: unit.product.sku, unitNameSnapshot: unit.unit.nameTh, quantity: line.quantity, conversionFactor: unit.conversionFactor, baseQuantity: line.quantity, fulfilledQuantity: "0.000", unitPrice: line.price, resolvedUnitPrice: line.price, priceSource: line.source, isPriceOverridden: false, lineSubtotal: totals.lines[index]!.lineSubtotal, discountAmount: line.discount, taxRate: line.tax, taxAmount: totals.lines[index]!.taxAmount, lineTotal: totals.lines[index]!.lineTotal }; }) });
+    await db.salesOrderStatusHistory.deleteMany({ where: { salesOrderId: order.id } });
+    await db.salesOrderStatusHistory.create({ data: { salesOrderId: order.id, fromStatus: definition.status === "DRAFT" ? null : "DRAFT", toStatus: definition.status, changedByName: "ข้อมูลตัวอย่าง", note: definition.status === "CANCELLED" ? "ยกเลิกเพื่อทดสอบขั้นตอนงาน" : "ข้อมูลตัวอย่าง Phase 7" } });
+  }
+  await db.documentSequence.upsert({ where: { key: "SO-202609" }, update: { currentValue: 5 }, create: { key: "SO-202609", currentValue: 5 } });
+}
+
+async function seedInventory() {
+  const mainWarehouse = await db.warehouse.findUniqueOrThrow({ where: { code: "MAIN" }, select: { id: true } });
+  const factoryWarehouse = await db.warehouse.upsert({ where: { code: "FACTORY" }, update: { name: "โรงงาน", type: "STORAGE", status: "ACTIVE" }, create: { code: "FACTORY", name: "โรงงาน", type: "STORAGE", status: "ACTIVE" } });
+  await db.warehouse.upsert({ where: { code: "DAMAGED" }, update: { name: "คลังสินค้าชำรุด", type: "STORAGE", status: "ACTIVE" }, create: { code: "DAMAGED", name: "คลังสินค้าชำรุด", type: "STORAGE", status: "ACTIVE" } });
+  const vehicleWarehouse = await db.warehouse.upsert({ where: { code: "VEH-TRUCK01" }, update: { name: "คลังรถ 1กข 1234", type: "VEHICLE", status: "ACTIVE", isDefault: false }, create: { code: "VEH-TRUCK01", name: "คลังรถ 1กข 1234", type: "VEHICLE", status: "ACTIVE", isDefault: false } });
+  await db.vehicle.upsert({ where: { code: "TRUCK01" }, update: { registrationNumber: "1กข 1234", description: "รถจัดส่งตัวอย่าง", status: "ACTIVE", warehouseId: vehicleWarehouse.id }, create: { code: "TRUCK01", registrationNumber: "1กข 1234", description: "รถจัดส่งตัวอย่าง", status: "ACTIVE", warehouseId: vehicleWarehouse.id } });
+  const products = await db.product.findMany({ where: { sku: { in: ["WATER-350-PACK", "WATER-600-PACK", "WATER-1500-PACK"] } }, select: { id: true, sku: true } });
+  const bySku = new Map(products.map((product) => [product.sku, product.id]));
+  const definitions = [
+    { movementNo: "STK-202609-00001", type: "OPENING" as const, occurredAt: new Date("2026-09-30T07:00:00+07:00"), destinationWarehouseId: mainWarehouse.id, referenceType: "OPENING_BALANCE", notes: "ยอดยกมาตัวอย่าง", entries: [[mainWarehouse.id, bySku.get("WATER-350-PACK")!, "120.000"], [mainWarehouse.id, bySku.get("WATER-600-PACK")!, "160.000"], [mainWarehouse.id, bySku.get("WATER-1500-PACK")!, "80.000"]] as const },
+    { movementNo: "STK-202609-00002", type: "OPENING" as const, occurredAt: new Date("2026-09-30T07:10:00+07:00"), destinationWarehouseId: factoryWarehouse.id, referenceType: "OPENING_BALANCE", notes: "ยอดยกมาโรงงาน", entries: [[factoryWarehouse.id, bySku.get("WATER-350-PACK")!, "40.000"], [factoryWarehouse.id, bySku.get("WATER-600-PACK")!, "60.000"]] as const },
+    { movementNo: "STK-202609-00003", type: "ADJUSTMENT" as const, occurredAt: new Date("2026-09-30T08:00:00+07:00"), destinationWarehouseId: mainWarehouse.id, referenceType: "STOCK_ADJUSTMENT", notes: "พบสินค้าเพิ่ม — ตัวอย่างการปรับปรุงสต็อก", entries: [[mainWarehouse.id, bySku.get("WATER-350-PACK")!, "5.000"]] as const },
+    { movementNo: "STK-202609-00004", type: "TRANSFER" as const, occurredAt: new Date("2026-09-30T08:30:00+07:00"), sourceWarehouseId: mainWarehouse.id, destinationWarehouseId: factoryWarehouse.id, referenceType: "STOCK_TRANSFER", notes: "ตัวอย่างการโอนย้ายสต็อก", entries: [[mainWarehouse.id, bySku.get("WATER-600-PACK")!, "-10.000"], [factoryWarehouse.id, bySku.get("WATER-600-PACK")!, "10.000"]] as const },
+  ];
+  for (const definition of definitions) await db.$transaction(async (tx) => {
+    if (await tx.inventoryMovement.findUnique({ where: { movementNo: definition.movementNo }, select: { id: true } })) return;
+    const movement = await tx.inventoryMovement.create({ data: { movementNo: definition.movementNo, type: definition.type, occurredAt: definition.occurredAt, sourceWarehouseId: "sourceWarehouseId" in definition ? definition.sourceWarehouseId : undefined, destinationWarehouseId: definition.destinationWarehouseId, referenceType: definition.referenceType, referenceId: definition.movementNo, notes: definition.notes }, select: { id: true } });
+    for (const [warehouseId, productId, quantity] of definition.entries) await tx.inventoryLedgerEntry.create({ data: { movementId: movement.id, warehouseId, productId, quantity } });
+  });
+  await db.$executeRaw`INSERT INTO "document_sequences" ("key", "currentValue", "updatedAt") VALUES ('STK-202609', 4, CURRENT_TIMESTAMP) ON CONFLICT ("key") DO UPDATE SET "currentValue" = GREATEST("document_sequences"."currentValue", 4), "updatedAt" = CURRENT_TIMESTAMP`;
 }
 
 async function main() {
@@ -74,6 +179,9 @@ async function main() {
     const users: [string, string, SystemRoleCode][] = [["owner@aquaops.local", "เจ้าของกิจการ (ทดสอบ)", "OWNER"], ["admin@aquaops.local", "ผู้ดูแลระบบ (ทดสอบ)", "ADMIN"], ["sales@aquaops.local", "ฝ่ายขาย (ทดสอบ)", "SALES"], ["accounting@aquaops.local", "ฝ่ายบัญชี (ทดสอบ)", "ACCOUNTING"], ["warehouse@aquaops.local", "ฝ่ายคลัง (ทดสอบ)", "WAREHOUSE"], ["delivery@aquaops.local", "ฝ่ายจัดส่ง (ทดสอบ)", "DELIVERY"], ["viewer@aquaops.local", "ผู้ดูข้อมูล (ทดสอบ)", "VIEWER"]];
     for (const [email, name, roleCode] of users) await upsertCredentialUser({ email, name, password, roleCode });
     await seedCustomerData();
+    await seedCatalogPricing();
+    await seedSalesOrders();
+    await seedInventory();
   }
 }
 

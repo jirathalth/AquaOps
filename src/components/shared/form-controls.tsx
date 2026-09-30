@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export function NumberInput(props: Omit<ComponentProps<typeof Input>, "type">) { return <Input type="number" inputMode="decimal" {...props} />; }
-export function CurrencyInput({ className, ...props }: Omit<ComponentProps<typeof Input>, "type">) { return <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">฿</span><Input type="number" inputMode="decimal" step="0.01" className={cn("pl-8 text-right tabular-nums", className)} {...props} /></div>; }
+export function CurrencyInput({ className, disabled, ...props }: Omit<ComponentProps<typeof Input>, "type">) { return <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">฿</span><Input type="number" inputMode="decimal" step="0.01" readOnly={disabled} aria-disabled={disabled} className={cn("pl-8 text-right tabular-nums", disabled && "cursor-not-allowed bg-muted opacity-70", className)} {...props} /></div>; }
 export function DateInput(props: Omit<ComponentProps<typeof Input>, "type">) { return <Input type="date" {...props} />; }
 
 type ComboboxProps = Omit<ComponentProps<typeof Input>, "list"> & { options: Array<{ value: string; label: string }> };

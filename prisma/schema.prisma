@@ -17,6 +17,11 @@ enum RecordStatus {
   INACTIVE
 }
 
+enum WarehouseType {
+  STORAGE
+  VEHICLE
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -134,25 +139,27 @@ enum PaymentStatus {
 }
 
 model User {
-  id                        String              @id
+  id                        String                    @id
   name                      String
-  email                     String              @unique
-  emailVerified             Boolean             @default(false)
+  email                     String                    @unique
+  emailVerified             Boolean                   @default(false)
   image                     String?
-  status                    UserStatus          @default(ACTIVE)
-  createdAt                 DateTime            @default(now())
-  updatedAt                 DateTime            @updatedAt
+  status                    UserStatus                @default(ACTIVE)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
   sessions                  Session[]
   accounts                  Account[]
-  roles                     UserRole[]          @relation("UserRoleUser")
-  assignedRoles             UserRole[]          @relation("UserRoleAssignedBy")
-  auditLogs                 AuditLog[]          @relation("AuditActor")
-  createdSalesOrders        SalesOrder[]        @relation("SalesOrderCreatedBy")
-  createdInventoryMovements InventoryMovement[] @relation("InventoryMovementCreatedBy")
-  createdDeliveryTrips      DeliveryTrip[]      @relation("DeliveryTripCreatedBy")
-  createdInvoices           Invoice[]           @relation("InvoiceCreatedBy")
-  createdBillingNotes       BillingNote[]       @relation("BillingNoteCreatedBy")
-  recordedPayments          Payment[]           @relation("PaymentRecordedBy")
+  roles                     UserRole[]                @relation("UserRoleUser")
+  assignedRoles             UserRole[]                @relation("UserRoleAssignedBy")
+  auditLogs                 AuditLog[]                @relation("AuditActor")
+  createdSalesOrders        SalesOrder[]              @relation("SalesOrderCreatedBy")
+  salesOrderStatusChanges   SalesOrderStatusHistory[] @relation("SalesOrderStatusChangedBy")
+  createdInventoryMovements InventoryMovement[]       @relation("InventoryMovementCreatedBy")
+  createdDeliveryTrips      DeliveryTrip[]            @relation("DeliveryTripCreatedBy")
+  assignedDeliveryTrips     DeliveryTrip[]            @relation("DeliveryTripDriver")
+  createdInvoices           Invoice[]                 @relation("InvoiceCreatedBy")
+  createdBillingNotes       BillingNote[]             @relation("BillingNoteCreatedBy")
+  recordedPayments          Payment[]                 @relation("PaymentRecordedBy")
 
   @@index([status])
   @@map("user")
@@ -405,6 +412,9 @@ model ProductUnit {
   unitId           String                 @db.Uuid
   conversionFactor Decimal                @db.Decimal(14, 6)
   barcode          String?                @unique @db.VarChar(64)
+  cost             Decimal                @default(0) @db.Decimal(14, 4)
+  retailPrice      Decimal                @default(0) @db.Decimal(14, 4)
+  wholesalePrice   Decimal                @default(0) @db.Decimal(14, 4)
   isBase           Boolean                @default(false)
   isActive         Boolean                @default(true)
   createdAt        DateTime               @default(now()) @db.Timestamptz(3)
@@ -478,6 +488,7 @@ model Warehouse {
   id                    String                 @id @default(uuid()) @db.Uuid
   code                  String                 @unique @db.VarChar(32)
   name                  String                 @db.VarChar(120)
+  type                  WarehouseType          @default(STORAGE)
   address               Json?
   status                RecordStatus           @default(ACTIVE)
   isDefault             Boolean                @default(false)
@@ -490,6 +501,7 @@ model Warehouse {
   sourceMovements       InventoryMovement[]    @relation("MovementSourceWarehouse")
   destinationMovements  InventoryMovement[]    @relation("MovementDestinationWarehouse")
   deliveryTrips         DeliveryTrip[]
+  vehicle               Vehicle?
 
   @@index([status])
   @@map("warehouses")
@@ -519,6 +531,7 @@ model InventoryMovement {
   destinationWarehouseId String?                @db.Uuid
   referenceType          String?                @db.VarChar(64)
   referenceId            String?                @db.VarChar(100)
+  idempotencyKey         String?                @unique @db.VarChar(120)
   notes                  String?
   createdById            String?
   createdAt              DateTime               @default(now()) @db.Timestamptz(3)
@@ -528,6 +541,7 @@ model InventoryMovement {
   entries                InventoryLedgerEntry[]
 
   @@index([type, occurredAt])
+  @@index([occurredAt])
   @@index([referenceType, referenceId])
   @@index([sourceWarehouseId])
   @@index([destinationWarehouseId])
@@ -572,35 +586,41 @@ model InventoryReservation {
 }
 
 model SalesOrder {
-  id                    String           @id @default(uuid()) @db.Uuid
-  orderNo               String           @unique @db.VarChar(32)
-  customerId            String           @db.Uuid
-  warehouseId           String           @db.Uuid
-  priceListId           String?          @db.Uuid
-  status                SalesOrderStatus @default(DRAFT)
-  saleType              SaleType
-  orderDate             DateTime         @db.Date
-  requestedDeliveryDate DateTime?        @db.Date
-  currency              String           @default("THB") @db.Char(3)
-  billingAddress        Json?
-  shippingAddress       Json?
-  subtotal              Decimal          @default(0) @db.Decimal(14, 2)
-  discountAmount        Decimal          @default(0) @db.Decimal(14, 2)
-  taxAmount             Decimal          @default(0) @db.Decimal(14, 2)
-  totalAmount           Decimal          @default(0) @db.Decimal(14, 2)
-  notes                 String?
-  confirmedAt           DateTime?        @db.Timestamptz(3)
-  cancelledAt           DateTime?        @db.Timestamptz(3)
-  createdById           String?
-  createdAt             DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime         @updatedAt @db.Timestamptz(3)
-  customer              Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  warehouse             Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  priceList             PriceList?       @relation(fields: [priceListId], references: [id], onDelete: SetNull)
-  createdBy             User?            @relation("SalesOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  items                 SalesOrderItem[]
-  deliveries            Delivery[]
-  invoices              Invoice[]
+  id                     String                    @id @default(uuid()) @db.Uuid
+  orderNo                String                    @unique @db.VarChar(32)
+  customerId             String                    @db.Uuid
+  warehouseId            String                    @db.Uuid
+  priceListId            String?                   @db.Uuid
+  status                 SalesOrderStatus          @default(DRAFT)
+  saleType               SaleType
+  customerCodeSnapshot   String                    @db.VarChar(32)
+  customerNameSnapshot   String                    @db.VarChar(200)
+  creditTermDaysSnapshot Int                       @default(0)
+  creditLimitSnapshot    Decimal                   @default(0) @db.Decimal(14, 2)
+  orderDate              DateTime                  @db.Date
+  requestedDeliveryDate  DateTime?                 @db.Date
+  currency               String                    @default("THB") @db.Char(3)
+  billingAddress         Json?
+  shippingAddress        Json?
+  subtotal               Decimal                   @default(0) @db.Decimal(14, 2)
+  documentDiscountAmount Decimal                   @default(0) @db.Decimal(14, 2)
+  discountAmount         Decimal                   @default(0) @db.Decimal(14, 2)
+  taxAmount              Decimal                   @default(0) @db.Decimal(14, 2)
+  totalAmount            Decimal                   @default(0) @db.Decimal(14, 2)
+  notes                  String?
+  confirmedAt            DateTime?                 @db.Timestamptz(3)
+  cancelledAt            DateTime?                 @db.Timestamptz(3)
+  createdById            String?
+  createdAt              DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime                  @updatedAt @db.Timestamptz(3)
+  customer               Customer                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  warehouse              Warehouse                 @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  priceList              PriceList?                @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  createdBy              User?                     @relation("SalesOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items                  SalesOrderItem[]
+  statusHistory          SalesOrderStatusHistory[]
+  deliveries             Delivery[]
+  invoices               Invoice[]
 
   @@index([customerId, orderDate])
   @@index([warehouseId, status])
@@ -612,35 +632,67 @@ model SalesOrder {
 }
 
 model SalesOrderItem {
-  id                String                 @id @default(uuid()) @db.Uuid
-  salesOrderId      String                 @db.Uuid
-  lineNo            Int
-  productId         String                 @db.Uuid
-  productUnitId     String                 @db.Uuid
-  sku               String                 @db.VarChar(64)
-  description       String                 @db.VarChar(255)
-  quantity          Decimal                @db.Decimal(14, 3)
-  conversionFactor  Decimal                @db.Decimal(14, 6)
-  baseQuantity      Decimal                @db.Decimal(14, 3)
-  fulfilledQuantity Decimal                @default(0) @db.Decimal(14, 3)
-  unitPrice         Decimal                @db.Decimal(14, 4)
-  discountAmount    Decimal                @default(0) @db.Decimal(14, 2)
-  taxRate           Decimal                @default(0) @db.Decimal(5, 2)
-  taxAmount         Decimal                @default(0) @db.Decimal(14, 2)
-  lineTotal         Decimal                @db.Decimal(14, 2)
-  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
-  salesOrder        SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  product           Product                @relation(fields: [productId], references: [id], onDelete: Restrict)
-  productUnit       ProductUnit            @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
-  reservations      InventoryReservation[]
-  deliveryItems     DeliveryItem[]
-  invoiceItems      InvoiceItem[]
+  id                  String                 @id @default(uuid()) @db.Uuid
+  salesOrderId        String                 @db.Uuid
+  lineNo              Int
+  productId           String                 @db.Uuid
+  productUnitId       String                 @db.Uuid
+  sku                 String                 @db.VarChar(64)
+  description         String                 @db.VarChar(255)
+  productNameSnapshot String                 @db.VarChar(200)
+  skuSnapshot         String                 @db.VarChar(64)
+  unitNameSnapshot    String                 @db.VarChar(100)
+  quantity            Decimal                @db.Decimal(14, 3)
+  conversionFactor    Decimal                @db.Decimal(14, 6)
+  baseQuantity        Decimal                @db.Decimal(14, 3)
+  fulfilledQuantity   Decimal                @default(0) @db.Decimal(14, 3)
+  unitPrice           Decimal                @db.Decimal(14, 4)
+  resolvedUnitPrice   Decimal                @db.Decimal(14, 4)
+  priceSource         String                 @db.VarChar(32)
+  isPriceOverridden   Boolean                @default(false)
+  lineSubtotal        Decimal                @db.Decimal(14, 2)
+  discountAmount      Decimal                @default(0) @db.Decimal(14, 2)
+  taxRate             Decimal                @default(0) @db.Decimal(5, 2)
+  taxAmount           Decimal                @default(0) @db.Decimal(14, 2)
+  lineTotal           Decimal                @db.Decimal(14, 2)
+  createdAt           DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @db.Timestamptz(3)
+  salesOrder          SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product             Product                @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productUnit         ProductUnit            @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
+  reservations        InventoryReservation[]
+  deliveryItems       DeliveryItem[]
+  invoiceItems        InvoiceItem[]
 
   @@unique([salesOrderId, lineNo])
   @@index([productId])
   @@index([productUnitId])
   @@map("sales_order_items")
+}
+
+model SalesOrderStatusHistory {
+  id            String            @id @default(uuid()) @db.Uuid
+  salesOrderId  String            @db.Uuid
+  fromStatus    SalesOrderStatus?
+  toStatus      SalesOrderStatus
+  changedById   String?
+  changedByName String?           @db.VarChar(120)
+  note          String?           @db.VarChar(500)
+  changedAt     DateTime          @default(now()) @db.Timestamptz(3)
+  salesOrder    SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  changedBy     User?             @relation("SalesOrderStatusChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([salesOrderId, changedAt])
+  @@index([changedById])
+  @@map("sales_order_status_history")
+}
+
+model DocumentSequence {
+  key          String   @id @db.VarChar(32)
+  currentValue Int      @default(0)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("document_sequences")
 }
 
 model DeliveryTrip {
@@ -649,7 +701,9 @@ model DeliveryTrip {
   warehouseId  String             @db.Uuid
   status       DeliveryTripStatus @default(PLANNED)
   plannedDate  DateTime           @db.Date
+  driverId     String?
   driverName   String?            @db.VarChar(120)
+  vehicleId    String?            @db.Uuid
   vehiclePlate String?            @db.VarChar(32)
   departedAt   DateTime?          @db.Timestamptz(3)
   returnedAt   DateTime?          @db.Timestamptz(3)
@@ -659,12 +713,32 @@ model DeliveryTrip {
   updatedAt    DateTime           @updatedAt @db.Timestamptz(3)
   warehouse    Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   createdBy    User?              @relation("DeliveryTripCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  driver       User?              @relation("DeliveryTripDriver", fields: [driverId], references: [id], onDelete: Restrict)
+  vehicle      Vehicle?           @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   stops        DeliveryStop[]
 
   @@index([warehouseId, plannedDate])
   @@index([status, plannedDate])
   @@index([createdById])
+  @@index([driverId, plannedDate])
+  @@index([vehicleId, plannedDate])
   @@map("delivery_trips")
+}
+
+model Vehicle {
+  id                 String         @id @default(uuid()) @db.Uuid
+  code               String         @unique @db.VarChar(32)
+  registrationNumber String         @unique @db.VarChar(32)
+  description        String?        @db.VarChar(255)
+  status             RecordStatus   @default(ACTIVE)
+  warehouseId        String         @unique @db.Uuid
+  createdAt          DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime       @updatedAt @db.Timestamptz(3)
+  warehouse          Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  deliveryTrips      DeliveryTrip[]
+
+  @@index([status])
+  @@map("vehicles")
 }
 
 model DeliveryStop {
@@ -696,7 +770,10 @@ model Delivery {
   salesOrderId   String         @db.Uuid
   status         DeliveryStatus @default(PENDING)
   deliveredAt    DateTime?      @db.Timestamptz(3)
+  returnedAt     DateTime?      @db.Timestamptz(3)
   receivedBy     String?        @db.VarChar(120)
+  failureReason  String?        @db.VarChar(500)
+  proofReference String?        @db.VarChar(255)
   notes          String?
   createdAt      DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime       @updatedAt @db.Timestamptz(3)

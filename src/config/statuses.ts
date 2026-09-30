@@ -8,6 +8,7 @@ export const statusConfig: Record<BusinessStatus, { th: string; en: string; clas
   ready: { th: "พร้อม", en: "Ready", className: "border-primary/30 bg-primary/12 text-primary" },
   delivering: { th: "กำลังจัดส่ง", en: "Delivering", className: "border-primary/30 bg-primary/12 text-primary" },
   delivered: { th: "จัดส่งแล้ว", en: "Delivered", className: "border-success/30 bg-success/12 text-success" },
+  failed: { th: "จัดส่งไม่สำเร็จ", en: "Failed", className: "border-danger/30 bg-danger/12 text-danger" },
   completed: { th: "เสร็จสิ้น", en: "Completed", className: "border-success/30 bg-success/12 text-success" },
   paid: { th: "ชำระแล้ว", en: "Paid", className: "border-success/30 bg-success/12 text-success" },
   partiallyPaid: { th: "ชำระบางส่วน", en: "Partially Paid", className: "border-warning/30 bg-warning/12 text-warning-foreground dark:text-warning" },

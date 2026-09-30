@@ -8,84 +8,83 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## AquaOps UI/UX instructions
+## Development mode
 
-For every task involving UI, UX, pages, layouts, components, dashboards, forms, tables, navigation, responsive behavior, or visual improvements, use the project-local `ui-ux-pro-max` skill at `.agents/skills/ui-ux-pro-max/SKILL.md` as the primary UI/UX guidance.
+Work in concise, production-ready full-stack development mode. Maximize signal and minimize tokens.
 
-Repository instructions and the existing AquaOps design system take precedence over generic skill recommendations. Preserve the current architecture, components, functionality, visual language, semantic tokens, IBM Plex Sans Thai typography, shadcn/ui foundation, and Lucide icon system. Do not introduce a second design system or replace a suitable existing library or pattern.
+- For coding tasks, make the requested changes directly and output code or patches first. Show only relevant changed sections unless the full file is requested.
+- Give direct answers first; keep simple answers to 1–3 sentences. Provide no preamble, closing remarks, request restatement, unsolicited explanation, or change summary.
+- Do not offer multiple solutions unless asked. Choose the simplest solution that meets current requirements; mention only materially important tradeoffs.
+- For debugging, briefly identify the likely root cause, fix it directly, and explain further only when asked.
 
-### UI implementation priority
+## Editing and architecture
 
-Read `design.md` before implementing UI. Apply UI guidance in this order:
+- Inspect relevant files and established patterns before making assumptions. Search for reusable components, utilities, services, APIs, models, and patterns before creating anything.
+- Make the smallest necessary change. Preserve existing behavior, code, structure, naming, architecture, and style unless the task requires otherwise.
+- Do not refactor or modify unrelated code or files. Do not introduce dependencies, abstractions, or duplicate functionality unless necessary or explicitly requested.
+- Respect the existing project structure. Keep components, services, utilities, APIs, database access, and business logic appropriately separated without over-engineering.
+- Keep code concise, maintainable, and production-ready. Avoid unnecessary comments.
+- When changing shared code, consider effects on existing features.
+
+## AquaOps UI/UX
+
+For every task involving UI, UX, pages, layouts, components, dashboards, forms, tables, navigation, responsive behavior, or visual improvements, use `.agents/skills/ui-ux-pro-max/SKILL.md` as the primary UI/UX skill and read `design.md` before implementation. Apply guidance in this order:
 
 1. Existing AquaOps architecture, functionality, business behavior, data flow, and routing.
 2. AquaOps `design.md`.
-3. Existing reusable AquaOps components and established patterns.
-4. `ui-ux-pro-max` expertise and recommendations.
+3. Existing reusable AquaOps components and patterns.
+4. `ui-ux-pro-max` guidance.
 
-If `ui-ux-pro-max` conflicts with a sound established AquaOps pattern, preserve consistency unless the existing pattern has a clear usability, accessibility, or responsive problem.
+Preserve a sound established AquaOps pattern unless it has a clear usability, accessibility, or responsive problem. Preserve the semantic tokens, IBM Plex Sans Thai typography, shadcn/ui foundation, and Lucide icon system; do not introduce a second design system or replace suitable libraries.
 
-### Product and visual direction
+AquaOps is an internal drinking-water factory operations platform, not a marketing site. Build clean, practical, accessible interfaces for efficient repeated use:
 
-AquaOps is an internal drinking-water factory operations platform covering dashboards, customers, products, retail and wholesale orders, cash and credit billing, invoicing, payments, delivery, inventory, production, reports, and settings. It must feel like a professional operations platform, not a marketing website.
+- Prioritize clarity, predictable interactions, strong hierarchy, readable data density, consistent spacing, typography, controls, and feedback over decoration.
+- Use semantic HTML, readable component structure, modern CSS, and Flexbox/Grid. Avoid excessive markup, wrappers, gradients, glassmorphism, shadows, oversized cards, decorative effects, and unnecessary animation.
+- Reuse or extend existing components and patterns before creating new ones. Keep buttons, inputs, selects, dialogs, tables, cards, badges, filters, pagination, and loading, empty, error, disabled, and success states consistent.
+- Keep common actions easy to find, validate forms clearly, provide appropriate action feedback, and guard destructive actions when appropriate.
+- Treat desktop operational workflows as primary and keep tablet fully usable. Support mobile when required without weakening desktop productivity. Prevent overflow, clipping, overlap, inaccessible actions, and broken tables; use contained horizontal scrolling or intentional column reduction when needed.
+- Improve existing screens rather than rebuilding them or redesigning unrelated areas. For substantial new screens, understand the workflow, establish hierarchy, reuse components, and verify desktop/tablet responsiveness and accessibility.
 
-- Prioritize clarity, usability, predictable interactions, strong information hierarchy, high readability, consistent spacing and alignment, and efficient repeated daily use.
-- Maintain useful information density without making screens feel crowded.
-- Prefer clean, modern SaaS/internal-tool patterns.
-- Avoid generic AI-generated dashboard aesthetics, excessive gradients, glassmorphism, shadows, oversized cards, decorative effects, and unnecessary animation.
-- Use IBM Plex Sans Thai for Thai and English. Thai readability and mixed-language typography are priorities.
-- Improve existing UI instead of rebuilding it. Do not redesign unrelated areas.
+Write every CSS rule on one line regardless of declaration count. Preserve other existing CSS conventions.
 
-### Components and implementation
+```css
+.foo { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px; }
+```
 
-Before creating a component, search for an existing reusable AquaOps component. Reuse or extend it when appropriate; create a new component only when necessary. Maintain consistency across buttons, inputs, selects, dialogs, tables, cards, status badges, filters, pagination, empty states, loading states, error states, and navigation.
+## Backend, API, and data
 
-- Make the smallest necessary change and preserve existing functionality.
-- Follow existing architecture and coding conventions.
-- Do not refactor or modify unrelated files.
-- Do not introduce dependencies unless necessary.
-- Reuse existing utilities and components.
-- Keep implementations concise, maintainable, accessible, and production-ready.
+- Follow the existing backend architecture. Keep routes/controllers thin and business logic separate from transport logic.
+- Validate and sanitize all external input; never trust client validation alone. Handle errors consistently, use appropriate HTTP status codes, and keep API responses predictable.
+- Prefer clear RESTful APIs unless the project uses another convention. Validate parameters, queries, and bodies; support pagination, filtering, sorting, and search when relevant.
+- Preserve existing API contracts and behavior unless explicitly asked to change them.
+- Follow the existing schema, ORM, and database conventions. Avoid unnecessary schema changes; use migrations, preserve integrity, and use transactions when related writes must succeed or fail together.
+- Avoid obvious N+1 queries, unnecessary network/database calls, and unjustified indexes. Never alter or delete production data unless explicitly instructed.
 
-### Responsive design
+## Security
 
-Desktop operational workflows are primary and tablet must remain fully usable. Support mobile when required, but do not weaken desktop productivity to optimize for mobile unless explicitly requested. Prevent horizontal page overflow, clipped content, broken tables, overlapping controls, and inaccessible actions. Use an intentional table strategy such as contained horizontal scrolling or reduced columns rather than indiscriminately shrinking data.
+- Never hardcode or expose secrets, passwords, tokens, API keys, stack traces, internal errors, or sensitive data. Use environment variables for sensitive configuration.
+- Enforce authentication and authorization server-side for protected operations.
+- Use parameterized queries or the project ORM safely. Account for XSS, CSRF, SQL injection, IDOR, and improper authorization where relevant.
+- Do not expose sensitive information in logs or API responses.
 
-### Design workflow
+## Debugging and testing
 
-For a substantial new screen:
+- Inspect relevant code, identify and fix the root cause, and avoid changing unrelated behavior or masking symptoms.
+- Preserve existing tests. Update affected tests when behavior intentionally changes and add focused tests for important new business logic; avoid tests for trivial implementation details.
+- Run the most relevant practical checks. Do not claim a result works unless verified or clearly supported by reasoning.
 
-1. Understand the operational workflow and inspect existing AquaOps components and patterns.
-2. Apply `ui-ux-pro-max` guidance while keeping the AquaOps design system authoritative.
-3. Establish information hierarchy and reuse existing components.
-4. Implement the UI and check desktop/tablet responsive behavior and accessibility.
-5. Use Playwright only when browser-level verification is materially useful.
-
-For an existing screen, preserve functionality, identify the specific UI/UX issue, change only what is necessary, and maintain consistency with the rest of AquaOps.
-
-### Playwright policy
-
-Use the cheapest reliable verification method first, in this order:
+Use the cheapest reliable verification method in this order:
 
 1. Static/code-level checks.
 2. `npm run lint`.
 3. `npm run typecheck`.
 4. Relevant unit or integration tests.
 5. `npm run build`.
-6. Playwright only when browser-level behavior needs verification.
+6. Playwright when browser-level verification is materially necessary.
 
-Do not run Playwright automatically after every task. Use it when changes affect authentication, login/logout, protected routes, RBAC or permission-based navigation, cross-page or multi-step workflows, important browser form interactions, dialogs/dropdowns/overlays, critical business workflows, responsive behavior that cannot be verified confidently through static inspection, or browser-only bugs.
+Use Playwright for authentication, protected routes, RBAC/permission navigation, cross-page or multi-step flows, important browser form interactions, dialogs/dropdowns/overlays, critical business workflows, responsive behavior that static inspection cannot establish, and browser-only bugs. It is normally unnecessary for schemas, Prisma models, documentation, types, server utilities, pure logic, or simple isolated styling.
 
-Playwright is normally unnecessary for database schemas, Prisma models, documentation, type definitions, server utilities, pure calculation or formatting logic, and simple isolated styling changes.
-
-When Playwright is necessary:
-
-- Start with the smallest relevant test file or affected flow.
-- Use the primary configured browser unless the task requires cross-browser coverage or evidence indicates a browser-specific regression.
-- Test only representative affected screens and viewports when responsive behavior changes.
-- Inspect screenshots, traces, DOM, or browser logs only when needed to diagnose a failure.
-- Re-run only the affected test after a fix; broaden regression coverage only when justified.
-- Keep output concise and do not repeatedly run already-passing unrelated tests.
-- Do not weaken correctness or skip necessary E2E verification merely to reduce execution time.
+When Playwright is necessary, start with the smallest relevant flow in the primary configured browser, test only representative affected screens/viewports, inspect artifacts only as needed, and re-run only affected tests before broadening coverage. Do not weaken correctness to reduce execution time.
 
 In completion reports, mention Playwright only when it ran, was intentionally skipped despite potential relevance, or browser verification remains necessary. When it was not needed, report exactly: `Playwright: Not required for this task.`
