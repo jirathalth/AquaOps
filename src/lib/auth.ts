@@ -1,12 +1,21 @@
+import "server-only";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { APIError, betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 
+const authSecret = process.env.BETTER_AUTH_SECRET;
+const authBaseUrl = process.env.BETTER_AUTH_URL;
+if (process.env.NODE_ENV === "production") {
+  if (!authSecret || authSecret.length < 32) throw new Error("BETTER_AUTH_SECRET must contain at least 32 characters in production");
+  if (!authBaseUrl) throw new Error("BETTER_AUTH_URL is required in production");
+  try { new URL(authBaseUrl); } catch { throw new Error("BETTER_AUTH_URL must be a valid absolute URL in production"); }
+}
+
 export const auth = betterAuth({
   appName: "AquaOps",
-  baseURL: process.env.BETTER_AUTH_URL,
-  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: authBaseUrl,
+  secret: authSecret,
   database: prismaAdapter(db, { provider: "postgresql" }),
   emailAndPassword: { enabled: true, disableSignUp: true },
   user: { additionalFields: { status: { type: "string", defaultValue: "ACTIVE", input: false } } },

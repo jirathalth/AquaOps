@@ -30,4 +30,34 @@ test.describe("delivery management", () => {
     await page.getByRole("dialog").getByRole("button", { name: "จบรอบจัดส่ง" }).click();
     await expect(page.getByText("เสร็จสิ้น", { exact: true }).first()).toBeVisible();
   });
+
+  test("returns failed-delivery stock before completing the trip", async ({ page }) => {
+    await page.goto("/delivery/trips/new");
+    await page.getByLabel("วันที่จัดส่ง").fill("2026-09-30");
+    await page.getByRole("combobox", { name: /^รถจัดส่ง/ }).click();
+    await page.getByRole("option", { name: /1กข 1234/ }).click();
+    await page.getByRole("combobox", { name: /^พนักงานขับรถ/ }).click();
+    await page.getByRole("option", { name: /ฝ่ายจัดส่ง/ }).click();
+    await page.getByLabel("เลือก SO-202609-00004").click();
+    await page.getByLabel("วันที่จัดส่ง").fill("2026-09-30");
+    await page.getByRole("button", { name: "สร้างรอบจัดส่ง" }).click();
+    await expect(page).toHaveURL(/\/delivery\/trips\/[0-9a-f-]+$/);
+    await page.getByRole("button", { name: "เตรียม/ขึ้นสินค้า" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "ขึ้นสินค้า" }).click();
+    await page.getByRole("button", { name: "ออกรถจัดส่ง" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "ออกรถจัดส่ง" }).click();
+    await page.getByRole("button", { name: "บันทึกผล" }).click();
+    await page.getByRole("combobox", { name: "ผลการจัดส่ง" }).click();
+    await page.getByRole("option", { name: "จัดส่งไม่สำเร็จ" }).click();
+    await page.getByRole("combobox", { name: "เหตุผล" }).click();
+    await page.getByRole("option", { name: "ลูกค้าไม่อยู่รับสินค้า" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "ยืนยันผลการจัดส่ง" }).click();
+    await expect(page.getByText("รอคืนสินค้า", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "คืนสินค้า" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "คืนสินค้า" }).click();
+    await expect(page.getByText("คืนสินค้าแล้ว", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "จบรอบจัดส่ง" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "จบรอบจัดส่ง" }).click();
+    await expect(page.getByText("เสร็จสิ้น", { exact: true }).first()).toBeVisible();
+  });
 });

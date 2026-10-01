@@ -31,10 +31,9 @@ export function updateCustomerPriceRecord(tx: PricingTransaction, id: string, da
 
 export async function findPriceResolutionContext(input: { customerId: string; productId: string; unitId: string; quantity: string; at: Date }, tx?: PricingTransaction) {
   const client = tx ?? db;
-  const [customer, productUnit] = await Promise.all([
-    client.customer.findFirst({ where: { id: input.customerId, deletedAt: null }, select: { id: true, type: true, status: true, defaultPriceList: { select: { id: true, code: true, name: true, status: true, validFrom: true, validTo: true, items: { where: { productUnit: { productId: input.productId, unitId: input.unitId }, minimumQuantity: { lte: input.quantity } }, select: { unitPrice: true }, orderBy: { minimumQuantity: "desc" }, take: 1 } } }, customPrices: { where: { productUnit: { productId: input.productId, unitId: input.unitId }, validFrom: { lte: input.at }, OR: [{ validTo: null }, { validTo: { gte: input.at } }] }, select: { id: true, unitPrice: true }, orderBy: { validFrom: "desc" }, take: 1 } } }),
-    client.productUnit.findFirst({ where: { productId: input.productId, unitId: input.unitId }, select: productUnitOptionSelect }),
-  ]);
+  const findCustomer = () => client.customer.findFirst({ where: { id: input.customerId, deletedAt: null }, select: { id: true, type: true, status: true, defaultPriceList: { select: { id: true, code: true, name: true, status: true, validFrom: true, validTo: true, items: { where: { productUnit: { productId: input.productId, unitId: input.unitId }, minimumQuantity: { lte: input.quantity } }, select: { unitPrice: true }, orderBy: { minimumQuantity: "desc" }, take: 1 } } }, customPrices: { where: { productUnit: { productId: input.productId, unitId: input.unitId }, validFrom: { lte: input.at }, OR: [{ validTo: null }, { validTo: { gte: input.at } }] }, select: { id: true, unitPrice: true }, orderBy: { validFrom: "desc" }, take: 1 } } });
+  const findProductUnit = () => client.productUnit.findFirst({ where: { productId: input.productId, unitId: input.unitId }, select: productUnitOptionSelect });
+  const [customer, productUnit] = tx ? [await findCustomer(), await findProductUnit()] : await Promise.all([findCustomer(), findProductUnit()]);
   return { customer, productUnit };
 }
 

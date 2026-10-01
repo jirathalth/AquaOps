@@ -63,7 +63,7 @@ Customer Management follows the same boundary: Server Components load paginated 
 
 Product and pricing modules use the same path through `features/products|pricing`, focused services, and focused repositories. Product/category/unit mutations and all price changes write audit events in their database transaction. `pricing.service` is the single pricing resolver used by current preview and future order services; UI components never implement pricing precedence.
 
-Sales orders follow `features/sales-orders → sales-order.service → sales-order.repository`. The UI submits customer/product references and operator inputs only; the service reloads active master data, calls the centralized pricing resolver, creates customer/product/unit/price snapshots, recalculates all totals with fixed-decimal domain logic, and persists the order, items, history, numbering, and audit records in one transaction. Server Actions repeat authentication, permission, and Zod validation for every mutation.
+Sales orders follow `features/sales-orders → sales-order.service → sales-order.repository`. The UI submits customer/product references and operator inputs only; the service reloads active master data, calls the centralized pricing resolver, creates customer identity/type, product/unit, and price snapshots, recalculates all totals with fixed-decimal domain logic, and persists the order, items, history, numbering, and audit records in one transaction. Server Actions repeat authentication, permission, and Zod validation for every mutation.
 
 Inventory follows `features/inventory → inventory.service → inventory.repository`. `recordInventoryMovement` is the controlled posting boundary. The service validates active warehouses and base product units, normalizes quantities with fixed-decimal helpers, generates `STK-YYYYMM-00001` numbers from `DocumentSequence`, and appends signed ledger entries. Adjustment and transfer audits share the same serializable transaction as the movement. UI code never updates balances.
 
@@ -71,13 +71,17 @@ Delivery follows `features/delivery → delivery.service → delivery.repository
 
 Accounting follows `features/accounting → accounting.service/accounting-core → accounting.repository`. Invoice, Billing Note, Payment, PaymentAllocation, outstanding, and aging rules stay out of React. Financial amounts remain decimal strings at boundaries and use fixed-decimal/Prisma Decimal persistence; list/detail/AR views all call the same outstanding strategy. Invoice issue, billing grouping, payment/allocation, and cancellation run in serializable transactions with database row locks and audit writes.
 
-Reporting follows `features/reports → reporting.service/reporting-core → reporting.repository`. Reports are read-only read models: pages validate URL search parameters, services compose authoritative sales/inventory/delivery/accounting definitions, and repositories own aggregation and pagination. Dashboard sales cards and charts share `salesWhere`; AR delegates to `getAccountsReceivable`; inventory reports delegate to the existing StockBalance/ledger services. Chart values cross into JavaScript numbers only inside the Chart.js presentation component after Decimal-safe server aggregation.
+Reporting follows `features/reports → reporting.service/reporting-core → reporting.repository`. Reports are read-only read models: pages validate URL search parameters, services compose authoritative sales/inventory/delivery/accounting definitions, and repositories own aggregation and pagination. Dashboard sales cards and charts share `salesWhere`; historical retail/wholesale segmentation uses `SalesOrder.customerTypeSnapshot`; AR delegates to `getAccountsReceivable`; inventory reports delegate to the existing StockBalance/ledger services. Chart values cross into JavaScript numbers only inside the Chart.js presentation component after Decimal-safe server aggregation.
 
 CSV export is a no-store Route Handler guarded by both `report.view` and the report's underlying domain permission. It exports the complete filtered result up to 10,000 rows, emits UTF-8 with BOM for Thai text, quotes CSV control characters, and prefixes spreadsheet-formula cells. No analytics database or report cache is introduced.
 
 ## Database strategy
 
 Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. Phase 1 business models use UUIDs, exact decimals, restrictive foreign keys, snapshot fields, an append-only inventory ledger, and invoice/payment allocations as the accounts-receivable source of truth. A singleton client prevents excess development connections. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).
+
+## Production readiness
+
+Production configuration is environment-driven and validated by server-only database/auth modules. `/api/health` performs a lightweight database connectivity check without exposing configuration. Database migrations and seeds are explicit deploy operations; application startup never creates mock data. Phase 12 verification runs fresh-database migration plus idempotent seed, cross-module reconciliation tests, a production build, real-auth/RBAC browser tests, and isolated critical operational browser flows. Operational gates and recovery expectations are recorded in [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md).
 
 ## Authentication and authorization
 

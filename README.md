@@ -60,7 +60,7 @@ Customer Management อยู่ที่ `/customers` รองรับกา�
 
 Product Management อยู่ที่ `/inventory/products` และ Price List Management อยู่ที่ `/price-lists` รองรับข้อมูลสินค้า หมวดหมู่ หน่วย ราคามาตรฐาน รายการราคา ราคาพิเศษลูกค้า และ pricing preview ตามลำดับ `Customer Override → Customer Price List → Product Default`
 
-Sales Order Management อยู่ที่ `/sales/orders` รองรับรายการแบบ server-side, สร้าง/แก้ไขฉบับร่าง, pricing snapshot, ส่วนลด/ภาษีแบบ Decimal-safe, ยืนยันและยกเลิกตาม RBAC พร้อม status history และ audit log การยืนยันคำสั่งซื้อใน Phase #7 **ไม่จองหรือตัดสต็อก**
+Sales Order Management อยู่ที่ `/sales/orders` รองรับรายการแบบ server-side, สร้าง/แก้ไขฉบับร่าง, customer-type/pricing snapshot, ส่วนลด/ภาษีแบบ Decimal-safe, ยืนยันและยกเลิกตาม RBAC พร้อม status history และ audit log การยืนยันคำสั่งซื้อใน Phase #7 **ไม่จองหรือตัดสต็อก**
 
 Inventory Management อยู่ที่ `/inventory/stock`, `/inventory/movements` และ `/inventory/warehouses` รองรับยอดคงเหลือ ประวัติแบบ immutable การปรับปรุง และการโอนย้ายระหว่างคลังแบบ atomic ตามสิทธิ์ `inventory.view`, `inventory.adjust`, `inventory.transfer` และ `inventory.manage_warehouse` จำนวนสต็อกใช้ Decimal และหน่วยหลักของสินค้า
 
@@ -89,9 +89,12 @@ npm run test
 npm run test:inventory-db
 npm run test:delivery-db
 npm run test:accounting-db
+npm run test:phase12-db
 npm run test:e2e
+npm run test:e2e:auth
 npm run test:e2e:delivery
 npm run test:e2e:accounting
+npm run test:e2e:phase12
 ```
 
 E2E ที่ต้องเข้าสู่ระบบใช้ฐานข้อมูลทดสอบที่ seed แล้ว และอ่าน credentials จาก `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`, `E2E_RESTRICTED_EMAIL`, `E2E_RESTRICTED_PASSWORD`; ชุดทดสอบดังกล่าวจะ skip พร้อมเหตุผลเมื่อไม่ได้กำหนดค่า
@@ -101,6 +104,10 @@ E2E ที่ต้องเข้าสู่ระบบใช้ฐานข�
 `npm run test:delivery-db` สร้างฐานข้อมูลชั่วคราว ทดสอบ migration/seed แบบ idempotent และตรวจ workflow ขึ้นสินค้า ออกรถ จัดส่งสำเร็จ จัดส่งไม่สำเร็จ คืนสินค้า และการป้องกัน movement ซ้ำ
 
 `npm run test:accounting-db` สร้างฐานข้อมูลชั่วคราว ทดสอบ migration/seed แบบ idempotent, reconciliation, partial payment, payment reversal, over-allocation และ concurrency ของ Payment/Billing Note
+
+`npm run test:phase12-db` deploy migration ทั้งหมดและ seed สองครั้งบนฐานข้อมูลชั่วคราว แล้วทดสอบ golden path เดียวตั้งแต่ pricing → Sales Order → Delivery → Inventory → Invoice → Billing → Payment → AR → Dashboard/Reports รวม snapshot และ idempotency
+
+`npm run test:e2e:auth` ตรวจ login, logout, unauthenticated access และ RBAC ด้วย Better Auth จริงบนฐานข้อมูลชั่วคราว ส่วน `npm run test:e2e:phase12` ตรวจ cash sale, wholesale credit จนชำระครบ, failed-delivery return, Sales Order, Delivery และ Accounting ใน Chromium
 
 `npm run test:e2e:delivery` สร้างฐานข้อมูลชั่วคราวและตรวจ workflow จัดส่งหลักใน Chromium ทั้งเดสก์ท็อปและมือถือ โดยไม่เปลี่ยนข้อมูลฐานพัฒนาหลัก
 
@@ -115,4 +122,6 @@ npm run build
 npm start
 ```
 
-ดูแนวทางโครงสร้างที่ [ARCHITECTURE.md](./ARCHITECTURE.md) และลำดับงานที่ [ROADMAP.md](./ROADMAP.md)
+Production ต้องกำหนด `DATABASE_URL`, `BETTER_AUTH_SECRET` อย่างน้อย 32 ตัวอักษร และ absolute `BETTER_AUTH_URL`; แอปจะหยุดพร้อมข้อความที่ชัดเจนหากค่าหลักไม่ครบ และไม่ยอมใช้ auth bypass ใน production
+
+ก่อน deploy ให้ทำตาม [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) ดูแนวทางโครงสร้างที่ [ARCHITECTURE.md](./ARCHITECTURE.md) และลำดับงานที่ [ROADMAP.md](./ROADMAP.md)

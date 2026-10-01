@@ -8,7 +8,7 @@ This schema is the Phase 1 data foundation for:
 Customer → Sales Order → Inventory → Delivery → Invoice → Billing Note → Payment → Accounts Receivable
 ```
 
-It defines persistence and integrity only. CRUD, workflows, numbering, status transitions, and authorization checks belong in future feature services.
+It defines persistence and integrity. CRUD, workflows, numbering, status transitions, and authorization checks remain in the implemented feature services rather than database transport code.
 
 ## Conventions
 
@@ -17,7 +17,7 @@ It defines persistence and integrity only. CRUD, workflows, numbering, status tr
 - Business timestamps use `timestamptz(3)`; document dates use PostgreSQL `date`. Application display uses `Asia/Bangkok`.
 - Money uses `decimal(14,2)`, unit prices/costs use `decimal(14,4)`, quantities use `decimal(14,3)`, and conversion factors use `decimal(14,6)`.
 - Currency is stored per transaction and defaults to `THB`.
-- Transactional documents store address, product, description, unit conversion, and price snapshots so later master-data edits do not rewrite history.
+- Transactional documents store customer identity/type, address, product, description, unit conversion, and price snapshots so later master-data edits do not rewrite history.
 - Master records use active/inactive status or soft deletion. Issued transactional records must be cancelled, voided, or reversed instead of deleted.
 
 ## Domains
@@ -111,7 +111,7 @@ Customer codes use the PostgreSQL sequence and `CUS-000001` display format. Othe
 ## Sales order lifecycle
 
 - `DocumentSequence` uses one row per `SO-YYYYMM` period. Transactional upsert/increment provides concurrency-safe numbering; gaps after rollback/retry are acceptable.
-- Orders snapshot customer code/name and the credit term/limit that applied at creation or the last allowed draft edit. Cash orders store zero credit; historical credit terms are never recalculated from Customer.
+- Orders snapshot customer code/name/type and the credit term/limit that applied at creation or the last allowed draft edit. Cash orders store zero credit; historical customer segmentation and credit terms are never recalculated from Customer.
 - Items snapshot product name, SKU, unit name, conversion factor, resolved price, final unit price, and pricing source. Master-data and pricing changes never rewrite existing order lines.
 - Line gross is rounded to 2 decimals from exact quantity × unit price. Line discounts and the proportionally allocated document discount reduce the taxable base; tax is exclusive and calculated per line. Document subtotal, total discount, tax, and grand total are sums of the persisted server calculation.
 - Status transitions are centralized. Phase #7 permits `DRAFT → CONFIRMED`, `DRAFT → CANCELLED`, and `CONFIRMED → CANCELLED`; each writes `SalesOrderStatusHistory` and `AuditLog` in the same transaction.
@@ -172,4 +172,4 @@ npm run db:deploy
 npm run db:seed
 ```
 
-The baseline migration creates Phase 1 tables and database guards. `20260928010000_authentication_rbac` adds `UserStatus` and the indexed user status column without dropping or resetting data. `20260929000000_customer_management` adds billing-cycle fields and the concurrency-safe customer-code sequence. `20260930000000_product_pricing_management` adds exact base-unit cost/default selling prices and non-negative constraints without resetting data. `20260930010000_sales_order_management` adds order snapshots, status history, and document counters. `20260930020000_inventory_management` makes movement headers immutable, adds the movement-time index, and replaces balance application with a concurrency-safe conditional reduction. `20260930030000_delivery_management` adds vehicle warehouses, trip driver/vehicle references, delivery result/return metadata, inventory idempotency keys, and the active-order assignment guard. `20261001000000_accounting_phase_10` adds accounting documents, allocations, integrity triggers, and financial indexes. `20261001010000_reporting_phase_11_indexes` adds targeted status/business-date indexes for delivery results, invoices, and payments. If an existing database contains unmanaged tables, back it up and reconcile it with `prisma migrate diff` before applying migrations; do not mark a migration as applied unless every object and constraint already exists.
+The baseline migration creates Phase 1 tables and database guards. `20260928010000_authentication_rbac` adds `UserStatus` and the indexed user status column without dropping or resetting data. `20260929000000_customer_management` adds billing-cycle fields and the concurrency-safe customer-code sequence. `20260930000000_product_pricing_management` adds exact base-unit cost/default selling prices and non-negative constraints without resetting data. `20260930010000_sales_order_management` adds order snapshots, status history, and document counters. `20260930020000_inventory_management` makes movement headers immutable, adds the movement-time index, and replaces balance application with a concurrency-safe conditional reduction. `20260930030000_delivery_management` adds vehicle warehouses, trip driver/vehicle references, delivery result/return metadata, inventory idempotency keys, and the active-order assignment guard. `20261001000000_accounting_phase_10` adds accounting documents, allocations, integrity triggers, and financial indexes. `20261001010000_reporting_phase_11_indexes` adds targeted status/business-date indexes for delivery results, invoices, and payments. `20261001020000_phase12_production_readiness` backfills and requires the Sales Order customer-type snapshot used by historical reports. If an existing database contains unmanaged tables, back it up and reconcile it with `prisma migrate diff` before applying migrations; do not mark a migration as applied unless every object and constraint already exists.

@@ -21,7 +21,8 @@ Business modules:
 - [x] Payments
 - [x] Accounts Receivable / Aging
 - [x] Dashboard / Operational & Management Reports / CSV Export
-- Audit Logs
+- [x] Phase 1 integration testing, reconciliation, production build, and critical Playwright flows
+- [~] Audit Logs — critical actions are captured immutably; centralized operator viewer remains pending
 
 ## Phase 2 — Factory Operations
 

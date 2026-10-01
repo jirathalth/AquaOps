@@ -595,6 +595,7 @@ model SalesOrder {
   saleType               SaleType
   customerCodeSnapshot   String                    @db.VarChar(32)
   customerNameSnapshot   String                    @db.VarChar(200)
+  customerTypeSnapshot   CustomerType
   creditTermDaysSnapshot Int                       @default(0)
   creditLimitSnapshot    Decimal                   @default(0) @db.Decimal(14, 2)
   orderDate              DateTime                  @db.Date
@@ -623,6 +624,7 @@ model SalesOrder {
   invoices               Invoice[]
 
   @@index([customerId, orderDate])
+  @@index([customerTypeSnapshot, orderDate])
   @@index([warehouseId, status])
   @@index([status, orderDate])
   @@index([requestedDeliveryDate, status])

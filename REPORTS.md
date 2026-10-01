@@ -9,7 +9,7 @@
 | คำสั่งซื้อในช่วง | `SalesOrder` | `orderDate` | รวม CONFIRMED, PREPARING, READY, DELIVERING, DELIVERED, COMPLETED; ไม่รวม DRAFT, legacy PENDING, CANCELLED | `COUNT(*)` |
 | ยอดขายตามคำสั่งซื้อ | `SalesOrder` | `orderDate` | สถานะเดียวกับด้านบน | `SUM(totalAmount)` |
 | ยอดขายเงินสด / เครดิต | `SalesOrder.saleType` snapshot | `orderDate` | สถานะยอดขายที่ใช้ได้ | `SUM(totalAmount)` แยก CASH/CREDIT; ไม่ใช่ยอดรับเงิน |
-| ค้าปลีก / ค้าส่ง | `SalesOrder` + `Customer.type` | `orderDate` | สถานะยอดขายที่ใช้ได้ | `SUM(totalAmount)` แยกประเภทลูกค้าปัจจุบัน |
+| ค้าปลีก / ค้าส่ง | `SalesOrder.customerTypeSnapshot` | `orderDate` | สถานะยอดขายที่ใช้ได้ | `SUM(totalAmount)` แยกประเภทลูกค้า ณ วันที่สร้างคำสั่งซื้อ |
 | สถานะคำสั่งซื้อ | `SalesOrder.status` | `orderDate` | ทุกสถานะ รวม DRAFT/CANCELLED เพื่อการติดตามงาน; ไม่รวมใน KPI ยอดขาย | `COUNT(*)` แยกสถานะ |
 | ลูกหนี้คงค้าง | `Invoice` − valid `PaymentAllocation` | `asOfDate` | ใบแจ้งหนี้ที่ออกแล้วก่อน/ในวัน as-of; ไม่รวม DRAFT/VOID; allocation ใช้เฉพาะ Payment COMPLETED ที่ `paymentDate <= asOfDate` | Phase #10 `getAccountsReceivable` |
 | ลูกหนี้เกินกำหนด | AR service | `asOfDate` | bucket 1–30, 31–60, 61–90, 90+ | ผลรวม bucket เกินกำหนด |
@@ -20,7 +20,7 @@
 | ลูกค้าอันดับสูง | `SalesOrder` snapshot | `orderDate` | สถานะยอดขายที่ใช้ได้ | `SUM(totalAmount)` |
 | สินค้าอันดับสูง | `SalesOrderItem` snapshot | SalesOrder `orderDate` | สถานะยอดขายที่ใช้ได้ | `SUM(lineTotal)` |
 
-ข้อจำกัด: Sales Order ปัจจุบันไม่มี `customerTypeSnapshot` ดังนั้นกราฟ/รายงานค้าปลีกเทียบค้าส่งใช้ `Customer.type` ปัจจุบัน การเปลี่ยนประเภทลูกค้าอาจเปลี่ยนผลย้อนหลัง ชื่อ/รหัสลูกค้าและสินค้าใช้ transactional snapshots ที่มีอยู่
+รายงานประเภทลูกค้าใช้ `SalesOrder.customerTypeSnapshot` เช่นเดียวกับ snapshot ชื่อ/รหัสลูกค้าและสินค้า การเปลี่ยน customer master ภายหลังจึงไม่เปลี่ยนผลรายงานย้อนหลัง
 
 ## Reports
 
