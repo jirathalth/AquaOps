@@ -760,6 +760,7 @@ model DeliveryStop {
   @@unique([deliveryTripId, sequence])
   @@index([customerId])
   @@index([status])
+  @@index([status, completedAt])
   @@map("delivery_stops")
 }
 
@@ -783,6 +784,7 @@ model Delivery {
 
   @@unique([deliveryStopId, salesOrderId])
   @@index([salesOrderId, status])
+  @@index([status, deliveredAt])
   @@map("deliveries")
 }
 
@@ -805,33 +807,40 @@ model DeliveryItem {
 }
 
 model Invoice {
-  id                 String               @id @default(uuid()) @db.Uuid
-  invoiceNo          String               @unique @db.VarChar(32)
-  customerId         String               @db.Uuid
-  salesOrderId       String?              @db.Uuid
-  status             InvoiceStatus        @default(DRAFT)
-  invoiceDate        DateTime             @db.Date
-  dueDate            DateTime             @db.Date
-  currency           String               @default("THB") @db.Char(3)
-  billingAddress     Json?
-  subtotal           Decimal              @default(0) @db.Decimal(14, 2)
-  discountAmount     Decimal              @default(0) @db.Decimal(14, 2)
-  taxAmount          Decimal              @default(0) @db.Decimal(14, 2)
-  totalAmount        Decimal              @default(0) @db.Decimal(14, 2)
-  notes              String?
-  issuedAt           DateTime?            @db.Timestamptz(3)
-  voidedAt           DateTime?            @db.Timestamptz(3)
-  createdById        String?
-  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
-  customer           Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  salesOrder         SalesOrder?          @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
-  createdBy          User?                @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  items              InvoiceItem[]
-  billingNotes       BillingNoteInvoice[]
-  paymentAllocations PaymentAllocation[]
+  id                     String               @id @default(uuid()) @db.Uuid
+  invoiceNo              String               @unique @db.VarChar(32)
+  customerId             String               @db.Uuid
+  salesOrderId           String?              @db.Uuid
+  status                 InvoiceStatus        @default(DRAFT)
+  customerCodeSnapshot   String               @db.VarChar(32)
+  customerNameSnapshot   String               @db.VarChar(200)
+  taxIdSnapshot          String?              @db.VarChar(13)
+  taxBranchCodeSnapshot  String?              @db.VarChar(5)
+  creditTermDaysSnapshot Int                  @default(0)
+  invoiceDate            DateTime             @db.Date
+  dueDate                DateTime             @db.Date
+  currency               String               @default("THB") @db.Char(3)
+  billingAddress         Json?
+  subtotal               Decimal              @default(0) @db.Decimal(14, 2)
+  discountAmount         Decimal              @default(0) @db.Decimal(14, 2)
+  taxAmount              Decimal              @default(0) @db.Decimal(14, 2)
+  totalAmount            Decimal              @default(0) @db.Decimal(14, 2)
+  notes                  String?
+  issuedAt               DateTime?            @db.Timestamptz(3)
+  voidedAt               DateTime?            @db.Timestamptz(3)
+  voidReason             String?              @db.VarChar(500)
+  createdById            String?
+  createdAt              DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @db.Timestamptz(3)
+  customer               Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder             SalesOrder?          @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  createdBy              User?                @relation("InvoiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items                  InvoiceItem[]
+  billingNotes           BillingNoteInvoice[]
+  paymentAllocations     PaymentAllocation[]
 
   @@index([customerId, invoiceDate])
+  @@index([status, invoiceDate])
   @@index([customerId, status, dueDate])
   @@index([salesOrderId])
   @@index([status, dueDate])
@@ -840,25 +849,29 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id               String          @id @default(uuid()) @db.Uuid
-  invoiceId        String          @db.Uuid
-  lineNo           Int
-  salesOrderItemId String?         @db.Uuid
-  productId        String?         @db.Uuid
-  productUnitId    String?         @db.Uuid
-  description      String          @db.VarChar(255)
-  quantity         Decimal         @db.Decimal(14, 3)
-  unitPrice        Decimal         @db.Decimal(14, 4)
-  discountAmount   Decimal         @default(0) @db.Decimal(14, 2)
-  taxRate          Decimal         @default(0) @db.Decimal(5, 2)
-  taxAmount        Decimal         @default(0) @db.Decimal(14, 2)
-  lineTotal        Decimal         @db.Decimal(14, 2)
-  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
-  invoice          Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  salesOrderItem   SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: Restrict)
-  product          Product?        @relation(fields: [productId], references: [id], onDelete: Restrict)
-  productUnit      ProductUnit?    @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
+  id                  String          @id @default(uuid()) @db.Uuid
+  invoiceId           String          @db.Uuid
+  lineNo              Int
+  salesOrderItemId    String?         @db.Uuid
+  productId           String?         @db.Uuid
+  productUnitId       String?         @db.Uuid
+  description         String          @db.VarChar(255)
+  productNameSnapshot String          @db.VarChar(200)
+  skuSnapshot         String          @db.VarChar(64)
+  unitNameSnapshot    String          @db.VarChar(100)
+  quantity            Decimal         @db.Decimal(14, 3)
+  unitPrice           Decimal         @db.Decimal(14, 4)
+  lineSubtotal        Decimal         @db.Decimal(14, 2)
+  discountAmount      Decimal         @default(0) @db.Decimal(14, 2)
+  taxRate             Decimal         @default(0) @db.Decimal(5, 2)
+  taxAmount           Decimal         @default(0) @db.Decimal(14, 2)
+  lineTotal           Decimal         @db.Decimal(14, 2)
+  createdAt           DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @db.Timestamptz(3)
+  invoice             Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  salesOrderItem      SalesOrderItem? @relation(fields: [salesOrderItemId], references: [id], onDelete: Restrict)
+  product             Product?        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productUnit         ProductUnit?    @relation(fields: [productUnitId], references: [id], onDelete: Restrict)
 
   @@unique([invoiceId, lineNo])
   @@index([salesOrderItemId])
@@ -879,6 +892,7 @@ model BillingNote {
   notes              String?
   issuedAt           DateTime?            @db.Timestamptz(3)
   cancelledAt        DateTime?            @db.Timestamptz(3)
+  cancelReason       String?              @db.VarChar(500)
   createdById        String?
   createdAt          DateTime             @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
@@ -911,6 +925,7 @@ model BillingNoteInvoice {
 model Payment {
   id                String              @id @default(uuid()) @db.Uuid
   paymentNo         String              @unique @db.VarChar(32)
+  idempotencyKey    String?             @unique @db.VarChar(64)
   customerId        String              @db.Uuid
   status            PaymentStatus       @default(PENDING)
   method            PaymentMethod
@@ -922,6 +937,7 @@ model Payment {
   notes             String?
   completedAt       DateTime?           @db.Timestamptz(3)
   voidedAt          DateTime?           @db.Timestamptz(3)
+  voidReason        String?             @db.VarChar(500)
   recordedById      String?
   createdAt         DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
@@ -930,6 +946,7 @@ model Payment {
   allocations       PaymentAllocation[]
 
   @@index([customerId, paymentDate])
+  @@index([status, paymentDate])
   @@index([customerId, status])
   @@index([externalReference])
   @@index([recordedById])

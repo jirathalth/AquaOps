@@ -9,7 +9,7 @@ const activeDeliveryStatuses = ["PENDING", "LOADED", "IN_TRANSIT"] as const;
 const tripListSelect = { id: true, tripNo: true, plannedDate: true, status: true, driverName: true, vehiclePlate: true, updatedAt: true, warehouse: { select: { name: true } }, stops: { select: { deliveries: { select: { salesOrder: { select: { orderNo: true, customerNameSnapshot: true } } } } } }, _count: { select: { stops: true } } } satisfies Prisma.DeliveryTripSelect;
 
 function tripWhere(query: DeliveryTripListQuery): Prisma.DeliveryTripWhereInput {
-  return { ...(query.q ? { OR: [{ tripNo: { contains: query.q, mode: "insensitive" } }, { vehiclePlate: { contains: query.q, mode: "insensitive" } }, { driverName: { contains: query.q, mode: "insensitive" } }, { stops: { some: { deliveries: { some: { OR: [{ salesOrder: { orderNo: { contains: query.q, mode: "insensitive" } } }, { salesOrder: { customerNameSnapshot: { contains: query.q, mode: "insensitive" } } }] } } } } }] } : {}), ...(query.status === "ALL" ? {} : { status: query.status }), ...(query.driverId === "ALL" ? {} : { driverId: query.driverId }), ...(query.vehicleId === "ALL" ? {} : { vehicleId: query.vehicleId }), ...((query.dateFrom || query.dateTo) ? { plannedDate: { ...(query.dateFrom ? { gte: new Date(`${query.dateFrom}T00:00:00+07:00`) } : {}), ...(query.dateTo ? { lte: new Date(`${query.dateTo}T00:00:00+07:00`) } : {}) } } : {}) };
+  return { ...(query.q ? { OR: [{ tripNo: { contains: query.q, mode: "insensitive" } }, { vehiclePlate: { contains: query.q, mode: "insensitive" } }, { driverName: { contains: query.q, mode: "insensitive" } }, { stops: { some: { deliveries: { some: { OR: [{ salesOrder: { orderNo: { contains: query.q, mode: "insensitive" } } }, { salesOrder: { customerNameSnapshot: { contains: query.q, mode: "insensitive" } } }] } } } } }] } : {}), ...(query.status === "ALL" ? {} : { status: query.status }), ...(query.driverId === "ALL" ? {} : { driverId: query.driverId }), ...(query.vehicleId === "ALL" ? {} : { vehicleId: query.vehicleId }), ...((query.dateFrom || query.dateTo) ? { plannedDate: { ...(query.dateFrom ? { gte: new Date(`${query.dateFrom}T00:00:00.000Z`) } : {}), ...(query.dateTo ? { lte: new Date(`${query.dateTo}T00:00:00.000Z`) } : {}) } } : {}) };
 }
 
 export async function findDeliveryTrips(query: DeliveryTripListQuery) {
@@ -17,12 +17,12 @@ export async function findDeliveryTrips(query: DeliveryTripListQuery) {
   const [rows, total] = await db.$transaction([db.deliveryTrip.findMany({ where, select: tripListSelect, orderBy: [orderBy, { id: "asc" }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }), db.deliveryTrip.count({ where })]); return { rows, total };
 }
 
-export async function getDeliveryDashboardCounts(today: Date, tomorrow: Date) {
+export async function getDeliveryDashboardCounts(dateToday: Date, dateTomorrow: Date, timestampToday: Date, timestampTomorrow: Date) {
   const [waitingOrders, plannedToday, inProgress, deliveredToday, failedPending] = await db.$transaction([
     db.salesOrder.count({ where: { status: { in: ["CONFIRMED", "READY"] }, shippingAddress: { not: Prisma.JsonNull }, deliveries: { none: { status: { in: [...activeDeliveryStatuses] } } } } }),
-    db.deliveryTrip.count({ where: { plannedDate: { gte: today, lt: tomorrow }, status: { in: ["PLANNED", "LOADING"] } } }),
+    db.deliveryTrip.count({ where: { plannedDate: { gte: dateToday, lt: dateTomorrow }, status: { in: ["PLANNED", "LOADING"] } } }),
     db.deliveryTrip.count({ where: { status: "IN_TRANSIT" } }),
-    db.delivery.count({ where: { status: "DELIVERED", deliveredAt: { gte: today, lt: tomorrow } } }),
+    db.delivery.count({ where: { status: "DELIVERED", deliveredAt: { gte: timestampToday, lt: timestampTomorrow } } }),
     db.delivery.count({ where: { status: "FAILED", returnedAt: null } }),
   ]); return { waitingOrders, plannedToday, inProgress, deliveredToday, failedPending };
 }

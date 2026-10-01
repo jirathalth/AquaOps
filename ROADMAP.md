@@ -16,11 +16,11 @@ Business modules:
 - [x] Sales Orders
 - [x] Inventory (ledger, balances, warehouses, adjustments, transfers, movement history)
 - [x] Delivery (planning, loading, dispatch, result, vehicle stock, return)
-- Invoices
-- Billing
-- Payments
-- Accounts Receivable
-- Reports
+- [x] Invoices
+- [x] Billing
+- [x] Payments
+- [x] Accounts Receivable / Aging
+- [x] Dashboard / Operational & Management Reports / CSV Export
 - Audit Logs
 
 ## Phase 2 — Factory Operations

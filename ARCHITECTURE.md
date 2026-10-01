@@ -69,6 +69,12 @@ Inventory follows `features/inventory → inventory.service → inventory.reposi
 
 Delivery follows `features/delivery → delivery.service → delivery.repository`. The service owns trip numbering and lifecycle, order assignment, sequence, Sales Order histories, delivery outcomes, returns, and audit orchestration. Critical actions use one serializable transaction and call the centralized inventory batch posting boundary; React components and Server Actions never create ledger rows or update balances. The existing `DeliveryStop → Delivery → DeliveryItem` structure represents ordered trip stops and their Sales Orders, so no competing `DeliveryTripOrder` model is introduced.
 
+Accounting follows `features/accounting → accounting.service/accounting-core → accounting.repository`. Invoice, Billing Note, Payment, PaymentAllocation, outstanding, and aging rules stay out of React. Financial amounts remain decimal strings at boundaries and use fixed-decimal/Prisma Decimal persistence; list/detail/AR views all call the same outstanding strategy. Invoice issue, billing grouping, payment/allocation, and cancellation run in serializable transactions with database row locks and audit writes.
+
+Reporting follows `features/reports → reporting.service/reporting-core → reporting.repository`. Reports are read-only read models: pages validate URL search parameters, services compose authoritative sales/inventory/delivery/accounting definitions, and repositories own aggregation and pagination. Dashboard sales cards and charts share `salesWhere`; AR delegates to `getAccountsReceivable`; inventory reports delegate to the existing StockBalance/ledger services. Chart values cross into JavaScript numbers only inside the Chart.js presentation component after Decimal-safe server aggregation.
+
+CSV export is a no-store Route Handler guarded by both `report.view` and the report's underlying domain permission. It exports the complete filtered result up to 10,000 rows, emits UTF-8 with BOM for Thai text, quotes CSV control characters, and prefixes spreadsheet-formula cells. No analytics database or report cache is introduced.
+
 ## Database strategy
 
 Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. Phase 1 business models use UUIDs, exact decimals, restrictive foreign keys, snapshot fields, an append-only inventory ledger, and invoice/payment allocations as the accounts-receivable source of truth. A singleton client prevents excess development connections. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).
@@ -122,3 +128,12 @@ Inactive users are rejected when Better Auth creates a session and rejected agai
 - Successful delivery posts one idempotent `SALE` movement from the vehicle warehouse and moves the order to `DELIVERED`. Delivery does not move the order to `COMPLETED`; invoicing/payment phases may own that future rule.
 - Failed delivery does not post a sale. Stock remains in the vehicle warehouse until the explicit idempotent return transfers it to the source warehouse, after which the order returns to `READY` for re-delivery. A trip cannot complete while failed stock remains unreturned.
 - Sales Orders use their persisted shipping-address snapshot. Customer master-data changes never rewrite an assigned delivery destination.
+
+## Accounting lifecycle
+
+- Phase 10 creates one full-order Invoice from a `DELIVERED` Sales Order; issue moves the order to `COMPLETED`. A partial unique index prevents another non-void full-order invoice while preserving the schema's future multiple-invoice relationship.
+- Invoice/customer/item/pricing/credit-term snapshots become immutable after issue. CASH invoices are due on the invoice date; CREDIT invoices use the Sales Order credit-term snapshot.
+- Billing Notes group current outstanding amounts for one customer. Invoice row locks plus Serializable transactions prevent conflicting active assignments.
+- Payments are posted once with zero or more immutable allocations. Unallocated money remains explicit; voiding a payment retains allocations as history but removes their financial effect.
+- Invoice outstanding is total minus allocations whose Payment is `COMPLETED`. Status precedence is `PAID`, then `OVERDUE`, then `PARTIALLY_PAID`, then `ISSUED`; paid/outstanding values remain visible when overdue.
+- AR is derived from Invoice and PaymentAllocation, never manually edited. Aging uses due date against an explicit Bangkok business `asOfDate`: current, 1–30, 31–60, 61–90, and 90+ days.

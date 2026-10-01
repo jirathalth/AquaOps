@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePriceListItemInput, selectResolvedPrice } from "@/services/pricing-core";
+import { normalizePriceListItemInput, parseBusinessDate, parseDateOnly, selectResolvedPrice, toDateInput } from "@/services/pricing-core";
 import { priceListItemSchema } from "@/validations/pricing";
 
 const priceList = { id: "list-1", code: "WHOLESALE-A", name: "ราคาส่ง A" };
@@ -8,4 +8,5 @@ describe("pricing core", () => {
   it("resolves price list before product default", () => { const resolved = selectResolvedPrice({ customerType: "WHOLESALE", retailPrice: "55.0000", wholesalePrice: "47.0000", priceListPrice: { unitPrice: "44.0000", source: "PRICE_LIST", priceList } }); expect(resolved).toMatchObject({ unitPrice: "44.0000", source: "PRICE_LIST", priceList }); });
   it("uses retail or wholesale product default by customer type", () => { expect(selectResolvedPrice({ customerType: "RETAIL", retailPrice: "55.0000", wholesalePrice: "47.0000" })).toMatchObject({ unitPrice: "55.0000", source: "PRODUCT_DEFAULT" }); expect(selectResolvedPrice({ customerType: "WHOLESALE", retailPrice: "55.0000", wholesalePrice: "47.0000" })).toMatchObject({ unitPrice: "47.0000", source: "PRODUCT_DEFAULT" }); });
   it("preserves four-decimal precision and rejects duplicate tier key inputs at validation boundaries", () => { const parsed = priceListItemSchema.parse({ priceListId: "4c30ee55-6073-43ca-86f1-1d715d91a756", productUnitId: "fd3a1187-7c0f-4d53-85c1-4d8a16363bc0", minimumQuantity: "12.5", unitPrice: "42.1255" }); expect(normalizePriceListItemInput(parsed)).toMatchObject({ minimumQuantity: "12.500", unitPrice: "42.1255" }); expect(priceListItemSchema.safeParse({ ...parsed, unitPrice: "42.12345" }).success).toBe(false); });
+  it("separates database dates from Bangkok business timestamps", () => { const dateOnly = parseDateOnly("2026-10-01"); const timestamp = parseBusinessDate("2026-10-01"); expect(dateOnly?.toISOString()).toBe("2026-10-01T00:00:00.000Z"); expect(timestamp?.toISOString()).toBe("2026-09-30T17:00:00.000Z"); expect(toDateInput(dateOnly)).toBe("2026-10-01"); expect(toDateInput(timestamp)).toBe("2026-10-01"); });
 });

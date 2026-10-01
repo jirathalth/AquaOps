@@ -31,6 +31,7 @@ export const permissionRegistry = [
   { code: "payment.view", label: "ดูการชำระเงิน", group: "บัญชี" },
   { code: "payment.create", label: "บันทึกการชำระเงิน", group: "บัญชี" },
   { code: "payment.allocate", label: "จัดสรรการชำระเงิน", group: "บัญชี" },
+  { code: "payment.cancel", label: "ยกเลิกการรับชำระเงิน", group: "บัญชี" },
   { code: "ar.view", label: "ดูลูกหนี้การค้า", group: "บัญชี" },
   { code: "report.view", label: "ดูรายงาน", group: "รายงาน" },
   { code: "user.view", label: "ดูผู้ใช้งาน", group: "ผู้ดูแลระบบ" },

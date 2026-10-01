@@ -1,3 +1,7 @@
-import { PlaceholderPage } from "@/components/shared/placeholder-page";
+import Link from "next/link";
+import { ArrowRight, BarChart3 } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { Card, CardContent } from "@/components/ui/card";
+import { reportCatalog, reportDefinitions } from "@/config/reports";
 import { requireRouteAccess } from "@/services/auth.service";
-export default async function Page() { await requireRouteAccess("/reports"); return <PlaceholderPage title="รายงาน" section="AquaOps" />; }
+export default async function Page() { const access = await requireRouteAccess("/reports"); const visible = reportCatalog.filter((item) => access.permissions.includes(reportDefinitions[item.key].permission)); return <div className="page-stack"><PageHeader title="รายงาน" description="รายงานปฏิบัติการและบริหารจากข้อมูลธุรกรรมจริงของ AquaOps" /><section aria-label="รายการรายงาน" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visible.map((item) => <Card key={item.key}><CardContent className="flex items-start gap-3 p-4"><div className="rounded-sm bg-primary/10 p-2 text-primary"><BarChart3 className="size-5" aria-hidden="true" /></div><div className="min-w-0 flex-1"><p className="type-caption text-muted-foreground">{item.group}</p><h2 className="type-card-title">{reportDefinitions[item.key].title}</h2><p className="mt-1 type-secondary text-muted-foreground">{item.detail}</p><Link className="mt-3 inline-flex min-h-9 items-center gap-1 text-sm font-medium text-primary hover:underline" href={`/reports/${item.key.replace("inventory-", "inventory/")}`}>เปิดรายงาน<ArrowRight className="size-4" aria-hidden="true" /></Link></div></CardContent></Card>)}</section>{!visible.length && <p className="text-muted-foreground">ไม่มีรายงานที่ได้รับอนุญาต</p>}</div>; }

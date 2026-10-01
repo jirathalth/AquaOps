@@ -17,7 +17,7 @@ export const defaultRolePermissions: Record<SystemRoleCode, readonly PermissionC
   OWNER: permissionCodes,
   ADMIN: permissionCodes,
   SALES: ["dashboard.view", "customer.view", "customer.create", "customer.update", "product.view", "price_list.view", "price_list.manage", "sales_order.view", "sales_order.create", "sales_order.update", "sales_order.confirm", "sales_order.cancel", "sales_order.override_price", "delivery.view", "invoice.view", "ar.view", "report.view"],
-  ACCOUNTING: ["dashboard.view", "customer.view", "sales_order.view", "invoice.view", "invoice.create", "invoice.issue", "invoice.cancel", "billing.view", "billing.manage", "payment.view", "payment.create", "payment.allocate", "ar.view", "report.view"],
+  ACCOUNTING: ["dashboard.view", "customer.view", "sales_order.view", "invoice.view", "invoice.create", "invoice.issue", "invoice.cancel", "billing.view", "billing.manage", "payment.view", "payment.create", "payment.allocate", "payment.cancel", "ar.view", "report.view"],
   WAREHOUSE: ["dashboard.view", "product.view", "product.create", "product.update", "inventory.view", "inventory.adjust", "inventory.transfer", "inventory.manage_warehouse", "sales_order.view", "delivery.view"],
   DELIVERY: ["dashboard.view", "sales_order.view", "delivery.view", "delivery.manage"],
   PRODUCTION: ["dashboard.view", "product.view", "inventory.view", "production.view", "production.manage"],

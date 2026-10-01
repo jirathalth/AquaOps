@@ -1,0 +1,7 @@
+import type { BusinessStatus } from "@/types/status";
+
+export const invoiceStatusConfig = { DRAFT: { label: "ฉบับร่าง", badge: "draft" }, ISSUED: { label: "ออกแล้ว", badge: "confirmed" }, PARTIALLY_PAID: { label: "ชำระบางส่วน", badge: "partiallyPaid" }, PAID: { label: "ชำระแล้ว", badge: "paid" }, OVERDUE: { label: "เกินกำหนด", badge: "overdue" }, VOID: { label: "ยกเลิก", badge: "cancelled" } } as const satisfies Record<string, { label: string; badge: BusinessStatus }>;
+export const billingStatusConfig = { DRAFT: { label: "ฉบับร่าง", badge: "draft" }, ISSUED: { label: "ออกแล้ว", badge: "confirmed" }, PARTIALLY_PAID: { label: "ชำระบางส่วน", badge: "partiallyPaid" }, PAID: { label: "ชำระแล้ว", badge: "paid" }, OVERDUE: { label: "เกินกำหนด", badge: "overdue" }, CANCELLED: { label: "ยกเลิก", badge: "cancelled" } } as const satisfies Record<string, { label: string; badge: BusinessStatus }>;
+export const paymentStatusConfig = { PENDING: { label: "รอดำเนินการ", badge: "pending" }, COMPLETED: { label: "บันทึกแล้ว", badge: "paid" }, VOID: { label: "ยกเลิก", badge: "cancelled" } } as const satisfies Record<string, { label: string; badge: BusinessStatus }>;
+export const paymentMethodConfig = { CASH: "เงินสด", BANK_TRANSFER: "โอนธนาคาร", QR_CODE: "คิวอาร์โค้ด", CHEQUE: "เช็ค", OTHER: "อื่น ๆ" } as const;
+export const agingBucketConfig = { CURRENT: "ยังไม่ครบกำหนด", DAYS_1_30: "1–30 วัน", DAYS_31_60: "31–60 วัน", DAYS_61_90: "61–90 วัน", DAYS_90_PLUS: "มากกว่า 90 วัน" } as const;

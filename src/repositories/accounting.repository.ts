@@ -1,0 +1,53 @@
+import "server-only";
+
+import { Prisma } from "@/generated/prisma/client";
+import { db } from "@/lib/db";
+
+export type AccountingTransaction = Prisma.TransactionClient;
+const activeInvoiceStatuses = ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] as const;
+const activeBillingStatuses = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "OVERDUE"] as const;
+const completedAllocation = { payment: { status: "COMPLETED" as const } };
+
+export function withAccountingTransaction<T>(operation: (tx: AccountingTransaction) => Promise<T>) { return db.$transaction(operation, { isolationLevel: "Serializable" }); }
+export async function nextAccountingNumber(tx: AccountingTransaction, prefix: "INV" | "BL" | "PAY", yearMonth: string) { const sequence = await tx.documentSequence.upsert({ where: { key: `${prefix}-${yearMonth}` }, create: { key: `${prefix}-${yearMonth}`, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `${prefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
+export function createAccountingAudit(tx: AccountingTransaction, data: Prisma.AuditLogUncheckedCreateInput) { return tx.auditLog.create({ data }); }
+
+export function listEligibleInvoiceOrders() { return db.salesOrder.findMany({ where: { status: "DELIVERED", invoices: { none: { status: { not: "VOID" } } } }, select: { id: true, orderNo: true, orderDate: true, customerCodeSnapshot: true, customerNameSnapshot: true, creditTermDaysSnapshot: true, totalAmount: true, saleType: true }, orderBy: [{ orderDate: "asc" }, { orderNo: "asc" }], take: 200 }); }
+export function findOrderForInvoice(tx: AccountingTransaction, id: string) { return tx.salesOrder.findUnique({ where: { id }, include: { customer: true, items: { orderBy: { lineNo: "asc" } }, invoices: { where: { status: { not: "VOID" } }, select: { id: true } } } }); }
+export function createInvoiceRecord(tx: AccountingTransaction, data: Prisma.InvoiceUncheckedCreateInput) { return tx.invoice.create({ data, select: { id: true, invoiceNo: true } }); }
+export function createInvoiceItems(tx: AccountingTransaction, data: Prisma.InvoiceItemCreateManyInput[]) { return tx.invoiceItem.createMany({ data }); }
+export function findInvoiceForUpdate(tx: AccountingTransaction, id: string) { return tx.invoice.findUnique({ where: { id }, include: { items: true, paymentAllocations: { where: completedAllocation }, billingNotes: { include: { billingNote: true } } } }); }
+export function updateInvoiceRecord(tx: AccountingTransaction, id: string, data: Prisma.InvoiceUncheckedUpdateInput) { return tx.invoice.update({ where: { id }, data }); }
+export async function completeSalesOrderForInvoice(tx: AccountingTransaction, input: { id: string; actorId: string | null; actorName: string }) { const updated = await tx.salesOrder.updateMany({ where: { id: input.id, status: "DELIVERED" }, data: { status: "COMPLETED" } }); if (updated.count) await tx.salesOrderStatusHistory.create({ data: { salesOrderId: input.id, fromStatus: "DELIVERED", toStatus: "COMPLETED", changedById: input.actorId, changedByName: input.actorName, note: "ออกใบแจ้งหนี้แล้ว" } }); }
+
+export async function listInvoices(input: { q?: string; status?: string; asOfDate: Date; page: number; pageSize: number }) {
+  const statusWhere: Prisma.InvoiceWhereInput = input.status === "OVERDUE" ? { status: { in: [...activeInvoiceStatuses] }, dueDate: { lt: input.asOfDate } } : input.status === "ISSUED" ? { status: "ISSUED", dueDate: { gte: input.asOfDate } } : input.status === "PARTIALLY_PAID" ? { status: "PARTIALLY_PAID", dueDate: { gte: input.asOfDate } } : input.status && input.status !== "ALL" ? { status: input.status as Prisma.EnumInvoiceStatusFilter["equals"] } : {};
+  const where: Prisma.InvoiceWhereInput = { ...(input.q ? { OR: [{ invoiceNo: { contains: input.q, mode: "insensitive" } }, { customerCodeSnapshot: { contains: input.q, mode: "insensitive" } }, { customerNameSnapshot: { contains: input.q, mode: "insensitive" } }, { salesOrder: { orderNo: { contains: input.q, mode: "insensitive" } } }] } : {}), ...statusWhere };
+  const [rows, total] = await db.$transaction([db.invoice.findMany({ where, include: { salesOrder: { select: { orderNo: true } }, paymentAllocations: { where: completedAllocation, select: { amount: true } } }, orderBy: [{ invoiceDate: "desc" }, { invoiceNo: "desc" }], skip: (input.page - 1) * input.pageSize, take: input.pageSize }), db.invoice.count({ where })]); return { rows, total };
+}
+
+export function findInvoiceDetail(id: string) { return db.invoice.findUnique({ where: { id }, include: { salesOrder: { select: { id: true, orderNo: true } }, items: { orderBy: { lineNo: "asc" } }, paymentAllocations: { include: { payment: { select: { id: true, paymentNo: true, paymentDate: true, status: true } } }, orderBy: { allocatedAt: "asc" } }, billingNotes: { include: { billingNote: { select: { id: true, billingNo: true, status: true, billingDate: true } } }, orderBy: { createdAt: "asc" } } } }); }
+export function listInvoiceAuditLogs(id: string) { return db.auditLog.findMany({ where: { entityType: "Invoice", entityId: id }, select: { id: true, action: true, actorName: true, afterData: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 100 }); }
+
+export function listAccountingCustomers() { return db.customer.findMany({ where: { status: "ACTIVE", deletedAt: null }, select: { id: true, code: true, displayName: true, creditLimit: true, creditTermDays: true, billingCycle: true, billingCycleNote: true }, orderBy: [{ code: "asc" }] }); }
+export function listOutstandingInvoicesForCustomer(customerId: string) { return db.invoice.findMany({ where: { customerId, status: { in: [...activeInvoiceStatuses] } }, include: { paymentAllocations: { where: completedAllocation, select: { amount: true } }, billingNotes: { where: { billingNote: { status: { in: [...activeBillingStatuses] } } }, include: { billingNote: { select: { id: true, billingNo: true, status: true } } } } }, orderBy: [{ dueDate: "asc" }, { invoiceNo: "asc" }] }); }
+
+export async function lockInvoices(tx: AccountingTransaction, ids: string[]) { if (!ids.length) return; await tx.$queryRaw`SELECT "id" FROM "invoices" WHERE "id" IN (${Prisma.join(ids)}) ORDER BY "id" FOR UPDATE`; }
+export function findInvoicesForAccounting(tx: AccountingTransaction, ids: string[]) { return tx.invoice.findMany({ where: { id: { in: ids } }, include: { paymentAllocations: { where: completedAllocation, select: { amount: true } }, billingNotes: { where: { billingNote: { status: { in: [...activeBillingStatuses] } } }, include: { billingNote: true } } } }); }
+
+export function createBillingRecord(tx: AccountingTransaction, data: Prisma.BillingNoteUncheckedCreateInput) { return tx.billingNote.create({ data, select: { id: true, billingNo: true } }); }
+export function createBillingInvoiceRecords(tx: AccountingTransaction, data: Prisma.BillingNoteInvoiceCreateManyInput[]) { return tx.billingNoteInvoice.createMany({ data }); }
+export function findBillingForUpdate(tx: AccountingTransaction, id: string) { return tx.billingNote.findUnique({ where: { id }, include: { invoices: { include: { invoice: { include: { paymentAllocations: { where: completedAllocation, select: { amount: true } } } } } }, paymentAllocations: { include: { payment: true } } } }); }
+export function updateBillingRecord(tx: AccountingTransaction, id: string, data: Prisma.BillingNoteUncheckedUpdateInput) { return tx.billingNote.update({ where: { id }, data }); }
+export function listBillingNotes() { return db.billingNote.findMany({ include: { customer: { select: { code: true, displayName: true } }, invoices: { include: { invoice: { include: { paymentAllocations: { where: completedAllocation, select: { amount: true } } } } } }, _count: { select: { invoices: true } } }, orderBy: [{ billingDate: "desc" }, { billingNo: "desc" }] }); }
+export function findBillingDetail(id: string) { return db.billingNote.findUnique({ where: { id }, include: { customer: { select: { code: true, displayName: true, billingCycle: true, billingCycleNote: true } }, invoices: { include: { invoice: { include: { paymentAllocations: { where: completedAllocation, select: { amount: true } } } } }, orderBy: { createdAt: "asc" } }, paymentAllocations: { include: { payment: { select: { id: true, paymentNo: true, paymentDate: true, status: true } } }, orderBy: { allocatedAt: "asc" } } } }); }
+
+export function createPaymentRecord(tx: AccountingTransaction, data: Prisma.PaymentUncheckedCreateInput) { return tx.payment.create({ data, select: { id: true, paymentNo: true } }); }
+export function findPaymentByIdempotencyKey(tx: AccountingTransaction, idempotencyKey: string) { return tx.payment.findUnique({ where: { idempotencyKey }, select: { id: true } }); }
+export function createPaymentAllocationRecords(tx: AccountingTransaction, data: Prisma.PaymentAllocationCreateManyInput[]) { return tx.paymentAllocation.createMany({ data }); }
+export function findPaymentForUpdate(tx: AccountingTransaction, id: string) { return tx.payment.findUnique({ where: { id }, include: { allocations: { include: { invoice: true } } } }); }
+export function updatePaymentRecord(tx: AccountingTransaction, id: string, data: Prisma.PaymentUncheckedUpdateInput) { return tx.payment.update({ where: { id }, data }); }
+export function listPayments() { return db.payment.findMany({ include: { customer: { select: { code: true, displayName: true } }, allocations: { select: { amount: true } }, _count: { select: { allocations: true } } }, orderBy: [{ paymentDate: "desc" }, { paymentNo: "desc" }] }); }
+export function findPaymentDetail(id: string) { return db.payment.findUnique({ where: { id }, include: { customer: { select: { code: true, displayName: true } }, recordedBy: { select: { name: true } }, allocations: { include: { invoice: { select: { id: true, invoiceNo: true, totalAmount: true, dueDate: true } }, billingNote: { select: { id: true, billingNo: true } } }, orderBy: { allocatedAt: "asc" } } } }); }
+
+export function listReceivableInvoices(asOfDate: Date) { return db.invoice.findMany({ where: { status: { notIn: ["DRAFT", "VOID"] }, invoiceDate: { lte: asOfDate } }, include: { customer: { select: { id: true, code: true, displayName: true, creditLimit: true, creditTermDays: true } }, paymentAllocations: { where: { payment: { status: "COMPLETED", paymentDate: { lte: asOfDate } } }, select: { amount: true } } }, orderBy: [{ dueDate: "asc" }, { invoiceNo: "asc" }] }); }

@@ -1,6 +1,6 @@
 # AquaOps
 
-ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม ปัจจุบันมี technical foundation, UI shell, Phase 1 database architecture, Authentication/RBAC, Customer Management, Product/Pricing Management, Sales Order Management, Inventory Management และ Delivery Management แล้ว
+ระบบบริหารจัดการภายในสำหรับธุรกิจผลิตและจัดจำหน่ายน้ำดื่ม ปัจจุบันมี technical foundation, UI shell, Phase 1 database architecture, Authentication/RBAC, Customer Management, Product/Pricing Management, Sales Order Management, Inventory Management, Delivery Management, Invoice/Billing/Payment/Accounts Receivable และ Dashboard/Reports จากข้อมูลจริงแล้ว
 
 ## Requirements
 
@@ -52,7 +52,7 @@ npm run db:migrate -- --name <change_name>
 npm run dev
 ```
 
-เปิด [http://localhost:3000](http://localhost:3000) หน้าแดชบอร์ดใช้ mock data เท่านั้น
+เปิด [http://localhost:3000](http://localhost:3000) หน้าแดชบอร์ดและรายงานอ่านข้อมูลธุรกรรมจริงตามสิทธิ์ของผู้ใช้ ช่วงเวลาเริ่มต้นคือเดือนปัจจุบันตามวันที่ธุรกิจ Asia/Bangkok
 
 ทุกหน้าภายในต้องเข้าสู่ระบบ หน้า `/admin/users` และ `/admin/roles` ใช้จัดการผู้ใช้ บทบาท และสิทธิ์ตาม permission ของผู้ปฏิบัติงาน บัญชี inactive จะเข้าสู่ระบบหรือใช้ session เดิมต่อไม่ได้
 
@@ -65,6 +65,14 @@ Sales Order Management อยู่ที่ `/sales/orders` รองรับ�
 Inventory Management อยู่ที่ `/inventory/stock`, `/inventory/movements` และ `/inventory/warehouses` รองรับยอดคงเหลือ ประวัติแบบ immutable การปรับปรุง และการโอนย้ายระหว่างคลังแบบ atomic ตามสิทธิ์ `inventory.view`, `inventory.adjust`, `inventory.transfer` และ `inventory.manage_warehouse` จำนวนสต็อกใช้ Decimal และหน่วยหลักของสินค้า
 
 Delivery Management อยู่ที่ `/delivery`, `/delivery/trips` และ `/delivery/vehicles` รองรับการวางแผนรอบ เพิ่ม/นำคำสั่งซื้อออก จัดลำดับ ขึ้นสินค้า ออกรถ บันทึกผล คืนสินค้าที่จัดส่งไม่สำเร็จ และจบรอบตามสิทธิ์ `delivery.view` / `delivery.manage` ที่อยู่จัดส่งใช้ snapshot จาก Sales Order เสมอ การขึ้นสินค้าโอน `คลังต้นทาง → คลังรถ`, การจัดส่งสำเร็จตัด `SALE` จากคลังรถ และรายการที่ไม่สำเร็จต้องคืน `คลังรถ → คลังต้นทาง` ก่อนจบรอบ
+
+งานบัญชีลูกหนี้อยู่ที่ `/accounting/invoices`, `/accounting/billing`, `/accounting/payments` และ `/accounting/ar` รองรับใบแจ้งหนี้จากคำสั่งซื้อที่ส่งสำเร็จ, snapshot ข้อมูลในวันที่ออกเอกสาร, ใบวางบิลหลายใบแจ้งหนี้, การรับชำระบางส่วน/หลายใบแจ้งหนี้, เงินรับล่วงหน้าที่ยังไม่จัดสรร, การยกเลิกแบบเก็บประวัติ และอายุลูกหนี้ตาม `asOfDate` ทั้งหมดใช้ Decimal และ transaction แบบ Serializable
+
+Dashboard อยู่ที่ `/dashboard` และรายงานอยู่ใต้ `/reports` ครอบคลุมยอดขาย สินค้า ลูกค้า การจัดส่ง สต็อก การเคลื่อนไหว ใบแจ้งหนี้ การรับชำระ และอายุลูกหนี้ ตัวกรองเก็บใน URL ตารางแบ่งหน้า/เรียงบนเซิร์ฟเวอร์ และ CSV ส่งออกข้อมูลที่ตรงกับตัวกรองได้สูงสุด 10,000 แถว ดูนิยามตัวชี้วัดที่ [REPORTS.md](./REPORTS.md)
+
+**PaymentAllocation is the authoritative relationship between Payments and Invoices.**
+
+**Accounts Receivable is derived from Invoice amounts minus valid Payment Allocations.**
 
 **InventoryTransaction is the authoritative stock movement history.** ใน schema ปัจจุบันแนวคิดนี้ประกอบด้วย `InventoryMovement` (หัวรายการ) และ signed `InventoryLedgerEntry` (รายการที่มีผลต่อสต็อก) ส่วน **InventoryBalance is a derived operational projection and must remain consistent with the ledger.** โดย model ที่ใช้ชื่อ `StockBalance` และอัปเดตด้วย database trigger ใน transaction เดียวกับ ledger เท่านั้น
 
@@ -80,8 +88,10 @@ npm run typecheck
 npm run test
 npm run test:inventory-db
 npm run test:delivery-db
+npm run test:accounting-db
 npm run test:e2e
 npm run test:e2e:delivery
+npm run test:e2e:accounting
 ```
 
 E2E ที่ต้องเข้าสู่ระบบใช้ฐานข้อมูลทดสอบที่ seed แล้ว และอ่าน credentials จาก `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`, `E2E_RESTRICTED_EMAIL`, `E2E_RESTRICTED_PASSWORD`; ชุดทดสอบดังกล่าวจะ skip พร้อมเหตุผลเมื่อไม่ได้กำหนดค่า
@@ -90,7 +100,11 @@ E2E ที่ต้องเข้าสู่ระบบใช้ฐานข�
 
 `npm run test:delivery-db` สร้างฐานข้อมูลชั่วคราว ทดสอบ migration/seed แบบ idempotent และตรวจ workflow ขึ้นสินค้า ออกรถ จัดส่งสำเร็จ จัดส่งไม่สำเร็จ คืนสินค้า และการป้องกัน movement ซ้ำ
 
+`npm run test:accounting-db` สร้างฐานข้อมูลชั่วคราว ทดสอบ migration/seed แบบ idempotent, reconciliation, partial payment, payment reversal, over-allocation และ concurrency ของ Payment/Billing Note
+
 `npm run test:e2e:delivery` สร้างฐานข้อมูลชั่วคราวและตรวจ workflow จัดส่งหลักใน Chromium ทั้งเดสก์ท็อปและมือถือ โดยไม่เปลี่ยนข้อมูลฐานพัฒนาหลัก
+
+`npm run test:e2e:accounting` สร้างฐานข้อมูลชั่วคราวและตรวจการรับชำระ การจัดสรร การยกเลิก และหน้าลูกหนี้ใน Chromium โดยไม่เปลี่ยนข้อมูลฐานพัฒนาหลัก
 
 ติดตั้ง Playwright browser ครั้งแรกด้วย `npx playwright install chromium` หากเครื่องยังไม่มี browser binary
 
