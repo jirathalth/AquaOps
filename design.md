@@ -94,9 +94,9 @@ The base radius is `0.625rem` (10px).
 - Default structural border: `border-border`; approved soft surfaces commonly use `border-border/80`.
 - Input boundaries use `border-input`; focus changes the border and visible outline to `ring`.
 - Cards use `shadow-sm`; filter bars and table containers use `shadow-xs`.
-- Buttons and controls may use `shadow-xs` to remain legible against the cool background.
+- Neutral buttons and controls may use `shadow-xs` to remain legible against the cool background. Primary and destructive filled buttons use their dedicated semantic gradient and tinted shadow tokens.
 - Dropdowns and select popovers use `shadow-md`; dialogs use `shadow-lg`.
-- Do not stack shadows, add colored shadows, or use elevation as the only boundary.
+- Do not stack shadows, add colored shadows outside the approved filled action button tokens, or use elevation as the only boundary.
 
 | Token | Value |
 | --- | --- |
@@ -172,6 +172,7 @@ Use Tailwind's 4px spacing scale. Preferred increments are 4, 8, 12, 16, 20, 24,
 
 - Use `Button`, `Input`, `Select`, `Textarea`, `Checkbox`, `Switch`, and the existing input wrappers.
 - One primary action per local context. Use outline for clear secondary actions, ghost for low-emphasis actions, and destructive only for destructive operations.
+- Primary and destructive filled variants use a restrained vertical gradient derived from their semantic color and a soft color-tinted shadow. Their component tokens use the `--button-primary-*` and `--button-danger-*` families. Hover may increase depth slightly; active reduces elevation; disabled removes the colored shadow. Do not apply this treatment to secondary, outline, ghost, link, or neutral icon buttons.
 - Default controls are 40px high on mobile and 36px at `sm`; small buttons are 36px mobile and 32px at `sm`.
 - Inputs, selects, and textareas use `bg-card`, `border-input`, `rounded-md`, and `shadow-xs` with an explicit focus outline.
 - Date fields use the shared `DateInput`; do not render raw `Input type="date"` controls in feature code. Its AquaOps calendar popover—not the browser/system picker—is the canonical experience, with Thai month and weekday labels, month navigation, today/clear actions, min/max handling, keyboard navigation, and the same popover surface treatment as menus.
@@ -270,7 +271,7 @@ Always verify desktop and tablet first for operational productivity, then mobile
 6. Reuse centralized statuses, empty/loading/error states, dialogs, menus, and sheets.
 7. Validate desktop, tablet, and mobile in both themes, including keyboard and focus behavior.
 
-Avoid gradients, glassmorphism, oversized cards, decorative shadows, excessive animation, ornamental illustrations, duplicate toolbars, and feature-specific visual languages. A new screen should look native to AquaOps because it reuses the system, not because it imitates a screenshot.
+Avoid gradients outside the approved filled action buttons, glassmorphism, oversized cards, decorative shadows, excessive animation, ornamental illustrations, duplicate toolbars, and feature-specific visual languages. A new screen should look native to AquaOps because it reuses the system, not because it imitates a screenshot.
 
 ## Change control
 
