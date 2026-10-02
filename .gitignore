@@ -37,6 +37,9 @@
 *.sqlite-journal
 *.sqlite3
 *.sqlite3-journal
+*.dump
+*.backup
+*.sql.gz
 
 # debug
 npm-debug.log*
