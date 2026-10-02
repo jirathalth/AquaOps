@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { findSettings } from "@/repositories/settings.repository";
 
 export type AccountingTransaction = Prisma.TransactionClient;
 const activeInvoiceStatuses = ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] as const;
@@ -9,7 +10,7 @@ const activeBillingStatuses = ["DRAFT", "ISSUED", "PARTIALLY_PAID", "OVERDUE"] a
 const completedAllocation = { payment: { status: "COMPLETED" as const } };
 
 export function withAccountingTransaction<T>(operation: (tx: AccountingTransaction) => Promise<T>) { return db.$transaction(operation, { isolationLevel: "Serializable" }); }
-export async function nextAccountingNumber(tx: AccountingTransaction, prefix: "INV" | "BL" | "PAY", yearMonth: string) { const sequence = await tx.documentSequence.upsert({ where: { key: `${prefix}-${yearMonth}` }, create: { key: `${prefix}-${yearMonth}`, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `${prefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
+export async function nextAccountingNumber(tx: AccountingTransaction, kind: "INV" | "BL" | "PAY", yearMonth: string) { const settings = await findSettings(tx); if (!settings) throw new Error("Business settings are not initialized"); const config = kind === "INV" ? { type: "INVOICE", prefix: settings.invoicePrefix } : kind === "BL" ? { type: "BILLING_NOTE", prefix: settings.billingNotePrefix } : { type: "PAYMENT", prefix: settings.paymentPrefix }; const key = `${config.type}-${yearMonth}`; const sequence = await tx.documentSequence.upsert({ where: { key }, create: { key, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `${config.prefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
 export function createAccountingAudit(tx: AccountingTransaction, data: Prisma.AuditLogUncheckedCreateInput) { return tx.auditLog.create({ data }); }
 
 export function listEligibleInvoiceOrders() { return db.salesOrder.findMany({ where: { status: "DELIVERED", invoices: { none: { status: { not: "VOID" } } } }, select: { id: true, orderNo: true, orderDate: true, customerCodeSnapshot: true, customerNameSnapshot: true, creditTermDaysSnapshot: true, totalAmount: true, saleType: true }, orderBy: [{ orderDate: "asc" }, { orderNo: "asc" }], take: 200 }); }

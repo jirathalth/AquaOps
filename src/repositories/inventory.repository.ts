@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { findSettings } from "@/repositories/settings.repository";
 import type { MovementListQuery, StockListQuery, WarehouseListQuery } from "@/validations/inventory";
 
 export type InventoryTransaction = Prisma.TransactionClient;
@@ -13,7 +14,7 @@ export async function findWarehouses(query: WarehouseListQuery) {
   const [rows, total] = await db.$transaction([db.warehouse.findMany({ where, select: { ...warehouseSelect, createdAt: true, updatedAt: true, _count: { select: { stockBalances: true, inventoryEntries: true } } }, orderBy: [orderBy, { id: "asc" }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }), db.warehouse.count({ where })]);
   return { rows, total };
 }
-export function listWarehouses(status?: "ACTIVE" | "INACTIVE") { return db.warehouse.findMany({ where: status ? { status } : undefined, select: warehouseSelect, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }); }
+export async function listWarehouses(status?: "ACTIVE" | "INACTIVE") { const [rows, settings] = await Promise.all([db.warehouse.findMany({ where: status ? { status } : undefined, select: warehouseSelect, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }), findSettings()]); const defaultId = settings?.defaultWarehouseId; return rows.map((row) => ({ ...row, isDefault: defaultId ? row.id === defaultId : row.isDefault })).sort((a, b) => Number(b.isDefault) - Number(a.isDefault)); }
 export function findWarehouseById(id: string, client: InventoryTransaction = db) { return client.warehouse.findUnique({ where: { id }, select: { ...warehouseSelect, _count: { select: { inventoryEntries: true, stockBalances: true } } } }); }
 export function createWarehouse(tx: InventoryTransaction, data: Prisma.WarehouseCreateInput) { return tx.warehouse.create({ data, select: warehouseSelect }); }
 export function updateWarehouse(tx: InventoryTransaction, id: string, data: Prisma.WarehouseUpdateInput) { return tx.warehouse.update({ where: { id }, data, select: warehouseSelect }); }
@@ -43,7 +44,7 @@ export function findMovementEntries(query: MovementListQuery) {
   return Promise.all([db.inventoryLedgerEntry.findMany({ where, include: { warehouse: { select: { id: true, name: true } }, product: { select: { id: true, sku: true, name: true, units: { where: { isBase: true }, take: 1, select: { unit: { select: { nameTh: true, symbol: true } } } } } }, movement: { include: { createdBy: { select: { name: true } } } } }, orderBy: [orderBy, { id: "asc" }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }), db.inventoryLedgerEntry.count({ where })]);
 }
 
-export async function nextInventoryMovementNumber(tx: InventoryTransaction, yearMonth: string) { const sequence = await tx.documentSequence.upsert({ where: { key: `STK-${yearMonth}` }, create: { key: `STK-${yearMonth}`, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `STK-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
+export async function nextInventoryMovementNumber(tx: InventoryTransaction, yearMonth: string) { const settings = await findSettings(tx); if (!settings) throw new Error("Business settings are not initialized"); const key = `INVENTORY_MOVEMENT-${yearMonth}`; const sequence = await tx.documentSequence.upsert({ where: { key }, create: { key, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `${settings.inventoryMovementPrefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
 export function findMovementByIdempotencyKey(tx: InventoryTransaction, idempotencyKey: string) { return tx.inventoryMovement.findUnique({ where: { idempotencyKey }, select: { id: true, movementNo: true, occurredAt: true } }); }
 export function createInventoryMovement(tx: InventoryTransaction, data: Prisma.InventoryMovementUncheckedCreateInput) { return tx.inventoryMovement.create({ data, select: { id: true, movementNo: true, occurredAt: true } }); }
 export function createInventoryLedgerEntry(tx: InventoryTransaction, data: Prisma.InventoryLedgerEntryUncheckedCreateInput) { return tx.inventoryLedgerEntry.create({ data, select: { id: true, quantity: true } }); }

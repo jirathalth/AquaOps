@@ -6,7 +6,7 @@
 
 - Node.js 20.19+ (Node.js 22 LTS recommended)
 - npm 10+
-- PostgreSQL 16+
+- Access to the shared PostgreSQL 16+ service (no local PostgreSQL is required after cloud cutover)
 
 ## Installation
 
@@ -19,31 +19,32 @@ cp .env.example .env
 ตั้งค่า `.env`:
 
 - `DATABASE_URL`: PostgreSQL connection string
+- `AQUAOPS_DATABASE_PURPOSE`: `shared` for all normal local and production runtime
 - `BETTER_AUTH_SECRET`: secret แบบสุ่มอย่างน้อย 32 ตัวอักษร (`openssl rand -base64 32`)
 - `BETTER_AUTH_URL`: URL ของแอป เช่น `http://localhost:3000`
-- `AQUAOPS_AUTH_BYPASS`: ตั้ง `true` ได้เฉพาะ local development เพื่อดู UI โดยไม่ใช้ฐานข้อมูล; production จะไม่ยอม bypass
+- `AQUAOPS_AUTH_BYPASS`: ใช้ได้เฉพาะ isolated test database ที่ผ่าน guard; ต้องเป็น `false` สำหรับ shared runtime
 - `AQUAOPS_BOOTSTRAP_EMAIL` / `AQUAOPS_BOOTSTRAP_PASSWORD`: ใส่เฉพาะตอน seed บัญชี OWNER ครั้งแรก (รหัสผ่านอย่างน้อย 12 ตัวอักษร)
-- `AQUAOPS_ENABLE_DEV_SEED` / `AQUAOPS_DEV_SEED_PASSWORD`: เปิดเฉพาะฐานข้อมูลพัฒนาเพื่อสร้างบัญชีตัวอย่าง ห้ามใช้ใน production
+- `TEST_DATABASE_URL` / `TEST_DATABASE_ADMIN_URL`: ใช้เฉพาะ isolated automated tests และห้ามชี้ไป shared runtime
+- `MIGRATION_DATABASE_URL`: credential สำหรับ DDL/migration โดยเฉพาะ
 
 ## Database
 
-สร้างฐานข้อมูล `aquaops` แล้วรัน:
+สำหรับ shared runtime ที่สร้าง schema แล้ว ให้รัน bootstrap แบบ explicit เมื่อจำเป็น:
 
 ```bash
 npm run db:validate
 npm run db:generate
-npm run db:deploy
-npm run db:seed
+npm run db:bootstrap
 ```
 
-Seed ทำงานแบบ idempotent สำหรับ permissions, system roles และ role-permission mappings โดยไม่เก็บรหัสผ่านไว้ใน source code เมื่อเปิด development seed จะสร้างลูกค้าตัวอย่าง หมวดหมู่ หน่วย สินค้า 10+ รายการ รายการราคา และราคาพิเศษลูกค้า
+Bootstrap ทำงานแบบ idempotent สำหรับ permissions, system roles และเฉพาะ role-permission mapping ที่เปลี่ยน โดยรักษา custom roles และ user assignments ไว้ Demo data ใช้ `npm run db:seed:demo` ได้เฉพาะ isolated test database
 
 Prisma schema ครอบคลุมฐานข้อมูล Phase 1, Better Auth, RBAC และ audit history แล้ว ดูรายละเอียดและ transaction rules ที่ [DATABASE.md](./DATABASE.md)
 
 ระหว่างพัฒนา schema ให้สร้าง migration ด้วย:
 
 ```bash
-npm run db:migrate -- --name <change_name>
+AQUAOPS_DATABASE_PURPOSE=migration npm run db:migrate:dev -- --name <change_name>
 ```
 
 ## Development
@@ -70,6 +71,8 @@ Delivery Management อยู่ที่ `/delivery`, `/delivery/trips` แล�
 
 Dashboard อยู่ที่ `/dashboard` และรายงานอยู่ใต้ `/reports` ครอบคลุมยอดขาย สินค้า ลูกค้า การจัดส่ง สต็อก การเคลื่อนไหว ใบแจ้งหนี้ การรับชำระ และอายุลูกหนี้ ตัวกรองเก็บใน URL ตารางแบ่งหน้า/เรียงบนเซิร์ฟเวอร์ และ CSV ส่งออกข้อมูลที่ตรงกับตัวกรองได้สูงสุด 10,000 แถว ดูนิยามตัวชี้วัดที่ [REPORTS.md](./REPORTS.md)
 
+System Settings อยู่ที่ `/settings` แบ่งเป็นข้อมูลกิจการ การขาย เอกสาร คลังและจัดส่ง การเงิน ภาษา/รูปแบบ และสถานะระบบ ใช้ `settings.view` / `settings.manage`, optimistic concurrency และ AuditLog การเปลี่ยนค่าใช้กับรายการใหม่เท่านั้น ดูขอบเขตและลำดับ fallback ที่ [SETTINGS.md](./SETTINGS.md)
+
 **PaymentAllocation is the authoritative relationship between Payments and Invoices.**
 
 **Accounts Receivable is derived from Invoice amounts minus valid Payment Allocations.**
@@ -90,16 +93,18 @@ npm run test:inventory-db
 npm run test:delivery-db
 npm run test:accounting-db
 npm run test:phase12-db
+npm run test:settings-db
 npm run test:e2e
 npm run test:e2e:auth
 npm run test:e2e:delivery
 npm run test:e2e:accounting
 npm run test:e2e:phase12
+npm run test:e2e:settings
 ```
 
 E2E ที่ต้องเข้าสู่ระบบใช้ฐานข้อมูลทดสอบที่ seed แล้ว และอ่าน credentials จาก `E2E_ADMIN_EMAIL`, `E2E_ADMIN_PASSWORD`, `E2E_RESTRICTED_EMAIL`, `E2E_RESTRICTED_PASSWORD`; ชุดทดสอบดังกล่าวจะ skip พร้อมเหตุผลเมื่อไม่ได้กำหนดค่า
 
-`npm run test:inventory-db` สร้างฐานข้อมูลชั่วคราวจาก `DATABASE_URL`, deploy migrations, ทดสอบ atomicity/concurrency/immutability/reconciliation แล้วลบฐานข้อมูลทิ้ง
+DB/E2E suites ต้องรันด้วย `AQUAOPS_DATABASE_PURPOSE=test` และใช้ `TEST_DATABASE_URL` + `TEST_DATABASE_ADMIN_URL`; runner ไม่ derive สิทธิ์ admin จาก `DATABASE_URL` และจะ abort ก่อนทดสอบหาก target ตรงกับ shared runtime ดู workflow ที่ [DATABASE_OPERATIONS.md](./DATABASE_OPERATIONS.md)
 
 `npm run test:delivery-db` สร้างฐานข้อมูลชั่วคราว ทดสอบ migration/seed แบบ idempotent และตรวจ workflow ขึ้นสินค้า ออกรถ จัดส่งสำเร็จ จัดส่งไม่สำเร็จ คืนสินค้า และการป้องกัน movement ซ้ำ
 
@@ -107,11 +112,15 @@ E2E ที่ต้องเข้าสู่ระบบใช้ฐานข�
 
 `npm run test:phase12-db` deploy migration ทั้งหมดและ seed สองครั้งบนฐานข้อมูลชั่วคราว แล้วทดสอบ golden path เดียวตั้งแต่ pricing → Sales Order → Delivery → Inventory → Invoice → Billing → Payment → AR → Dashboard/Reports รวม snapshot และ idempotency
 
+`npm run test:settings-db` deploy migration และ seed แบบ idempotent บนฐานข้อมูลชั่วคราว แล้วตรวจ persistence, optimistic concurrency, audit old/new, historical safety และ prefix/counter concurrency
+
 `npm run test:e2e:auth` ตรวจ login, logout, unauthenticated access และ RBAC ด้วย Better Auth จริงบนฐานข้อมูลชั่วคราว ส่วน `npm run test:e2e:phase12` ตรวจ cash sale, wholesale credit จนชำระครบ, failed-delivery return, Sales Order, Delivery และ Accounting ใน Chromium
 
 `npm run test:e2e:delivery` สร้างฐานข้อมูลชั่วคราวและตรวจ workflow จัดส่งหลักใน Chromium ทั้งเดสก์ท็อปและมือถือ โดยไม่เปลี่ยนข้อมูลฐานพัฒนาหลัก
 
 `npm run test:e2e:accounting` สร้างฐานข้อมูลชั่วคราวและตรวจการรับชำระ การจัดสรร การยกเลิก และหน้าลูกหนี้ใน Chromium โดยไม่เปลี่ยนข้อมูลฐานพัฒนาหลัก
+
+`npm run test:e2e:settings` ตรวจการแก้ไขแต่ละหมวด การยืนยันคำนำหน้า persistence, RBAC และ responsive containment ใน Chromium บนฐานข้อมูลชั่วคราว
 
 ติดตั้ง Playwright browser ครั้งแรกด้วย `npx playwright install chromium` หากเครื่องยังไม่มี browser binary
 
@@ -122,6 +131,6 @@ npm run build
 npm start
 ```
 
-Production ต้องกำหนด `DATABASE_URL`, `BETTER_AUTH_SECRET` อย่างน้อย 32 ตัวอักษร และ absolute `BETTER_AUTH_URL`; แอปจะหยุดพร้อมข้อความที่ชัดเจนหากค่าหลักไม่ครบ และไม่ยอมใช้ auth bypass ใน production
+Production ต้องกำหนด `DATABASE_URL`, `AQUAOPS_DATABASE_PURPOSE=shared`, `BETTER_AUTH_SECRET` อย่างน้อย 32 ตัวอักษร และ absolute `BETTER_AUTH_URL`; แอปจะหยุดพร้อมข้อความที่ไม่เปิดเผย credential หากค่าหลักไม่ครบหรือเปิด auth bypass
 
 ก่อน deploy ให้ทำตาม [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) ดูแนวทางโครงสร้างที่ [ARCHITECTURE.md](./ARCHITECTURE.md) และลำดับงานที่ [ROADMAP.md](./ROADMAP.md)

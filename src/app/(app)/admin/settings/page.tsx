@@ -1,3 +1,4 @@
-import { PlaceholderPage } from "@/components/shared/placeholder-page";
-import { requireRouteAccess } from "@/services/auth.service";
-export default async function Page() { await requireRouteAccess("/admin/settings"); return <PlaceholderPage title="ตั้งค่า" section="ผู้ดูแลระบบ" />; }
+import { redirect } from "next/navigation";
+import { requirePermission } from "@/services/auth.service";
+
+export default async function Page() { await requirePermission("settings.view"); redirect("/settings"); }

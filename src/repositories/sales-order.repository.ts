@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { findSettings } from "@/repositories/settings.repository";
 import type { SalesOrderListQuery } from "@/validations/sales-order";
 
 export type SalesOrderTransaction = Prisma.TransactionClient;
@@ -13,11 +14,11 @@ export function findSalesOrderById(id: string) { return db.salesOrder.findUnique
 export function findSalesOrderForUpdate(id: string, tx: SalesOrderTransaction) { return tx.salesOrder.findUnique({ where: { id }, include: { items: { orderBy: { lineNo: "asc" } } } }); }
 export function listActiveOrderCustomers() { return db.customer.findMany({ where: { status: "ACTIVE", deletedAt: null }, select: customerSelect, orderBy: [{ displayName: "asc" }, { code: "asc" }] }); }
 export function listActiveOrderProductUnits() { return db.productUnit.findMany({ where: { isActive: true, unit: { isActive: true }, product: { status: "ACTIVE", deletedAt: null } }, select: productUnitSelect, orderBy: [{ product: { name: "asc" } }, { unit: { nameTh: "asc" } }] }); }
-export function listActiveWarehouses() { return db.warehouse.findMany({ where: { status: "ACTIVE", type: "STORAGE" }, select: { id: true, code: true, name: true, isDefault: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }); }
+export async function listActiveWarehouses() { const [rows, settings] = await Promise.all([db.warehouse.findMany({ where: { status: "ACTIVE", type: "STORAGE" }, select: { id: true, code: true, name: true, isDefault: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }), findSettings()]); const defaultId = settings?.defaultWarehouseId; return rows.map((row) => ({ ...row, isDefault: defaultId ? row.id === defaultId : row.isDefault })).sort((a, b) => Number(b.isDefault) - Number(a.isDefault)); }
 export function findOrderCustomer(id: string, tx: SalesOrderTransaction) { return tx.customer.findFirst({ where: { id, status: "ACTIVE", deletedAt: null }, select: customerSelect }); }
 export function findOrderProductUnit(id: string, tx: SalesOrderTransaction) { return tx.productUnit.findFirst({ where: { id, isActive: true, unit: { isActive: true }, product: { status: "ACTIVE", deletedAt: null } }, select: productUnitSelect }); }
 export function findActiveWarehouse(id: string, tx: SalesOrderTransaction) { return tx.warehouse.findFirst({ where: { id, status: "ACTIVE", type: "STORAGE" }, select: { id: true } }); }
-export async function nextSalesOrderNumber(tx: SalesOrderTransaction, yearMonth: string) { const sequence = await tx.documentSequence.upsert({ where: { key: `SO-${yearMonth}` }, create: { key: `SO-${yearMonth}`, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `SO-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
+export async function nextSalesOrderNumber(tx: SalesOrderTransaction, yearMonth: string) { const settings = await findSettings(tx); if (!settings) throw new Error("Business settings are not initialized"); const key = `SALES_ORDER-${yearMonth}`; const sequence = await tx.documentSequence.upsert({ where: { key }, create: { key, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `${settings.salesOrderPrefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
 export function createSalesOrderRecord(tx: SalesOrderTransaction, data: Prisma.SalesOrderUncheckedCreateInput) { return tx.salesOrder.create({ data, select: { id: true, orderNo: true } }); }
 export function updateSalesOrderRecord(tx: SalesOrderTransaction, id: string, data: Prisma.SalesOrderUncheckedUpdateInput) { return tx.salesOrder.update({ where: { id }, data, select: { id: true } }); }
 export async function replaceSalesOrderItems(tx: SalesOrderTransaction, salesOrderId: string, items: Prisma.SalesOrderItemCreateManyInput[]) { await tx.salesOrderItem.deleteMany({ where: { salesOrderId } }); return tx.salesOrderItem.createMany({ data: items }); }

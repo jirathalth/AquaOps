@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { findSettings } from "@/repositories/settings.repository";
 import type { PriceListQuery } from "@/validations/pricing";
 
 export type PricingTransaction = Prisma.TransactionClient;
@@ -34,7 +35,10 @@ export async function findPriceResolutionContext(input: { customerId: string; pr
   const findCustomer = () => client.customer.findFirst({ where: { id: input.customerId, deletedAt: null }, select: { id: true, type: true, status: true, defaultPriceList: { select: { id: true, code: true, name: true, status: true, validFrom: true, validTo: true, items: { where: { productUnit: { productId: input.productId, unitId: input.unitId }, minimumQuantity: { lte: input.quantity } }, select: { unitPrice: true }, orderBy: { minimumQuantity: "desc" }, take: 1 } } }, customPrices: { where: { productUnit: { productId: input.productId, unitId: input.unitId }, validFrom: { lte: input.at }, OR: [{ validTo: null }, { validTo: { gte: input.at } }] }, select: { id: true, unitPrice: true }, orderBy: { validFrom: "desc" }, take: 1 } } });
   const findProductUnit = () => client.productUnit.findFirst({ where: { productId: input.productId, unitId: input.unitId }, select: productUnitOptionSelect });
   const [customer, productUnit] = tx ? [await findCustomer(), await findProductUnit()] : await Promise.all([findCustomer(), findProductUnit()]);
-  return { customer, productUnit };
+  if (!customer || customer.defaultPriceList) return { customer, productUnit };
+  const settings = await findSettings(client); if (!settings?.defaultPriceListId) return { customer, productUnit };
+  const fallback = await client.priceList.findUnique({ where: { id: settings.defaultPriceListId }, select: { id: true, code: true, name: true, status: true, validFrom: true, validTo: true, items: { where: { productUnit: { productId: input.productId, unitId: input.unitId }, minimumQuantity: { lte: input.quantity } }, select: { unitPrice: true }, orderBy: { minimumQuantity: "desc" }, take: 1 } } });
+  return { customer: { ...customer, defaultPriceList: fallback }, productUnit };
 }
 
 export function createPricingAuditLog(tx: PricingTransaction, data: Prisma.AuditLogUncheckedCreateInput) { return tx.auditLog.create({ data }); }

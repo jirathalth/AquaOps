@@ -432,19 +432,20 @@ model ProductUnit {
 }
 
 model PriceList {
-  id          String          @id @default(uuid()) @db.Uuid
-  code        String          @unique @db.VarChar(32)
-  name        String          @db.VarChar(120)
-  description String?
-  status      PriceListStatus @default(DRAFT)
-  currency    String          @default("THB") @db.Char(3)
-  validFrom   DateTime?       @db.Timestamptz(3)
-  validTo     DateTime?       @db.Timestamptz(3)
-  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
-  customers   Customer[]
-  items       PriceListItem[]
-  salesOrders SalesOrder[]
+  id               String            @id @default(uuid()) @db.Uuid
+  code             String            @unique @db.VarChar(32)
+  name             String            @db.VarChar(120)
+  description      String?
+  status           PriceListStatus   @default(DRAFT)
+  currency         String            @default("THB") @db.Char(3)
+  validFrom        DateTime?         @db.Timestamptz(3)
+  validTo          DateTime?         @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+  customers        Customer[]
+  items            PriceListItem[]
+  salesOrders      SalesOrder[]
+  businessDefaults BusinessSetting[]
 
   @@index([status, validFrom, validTo])
   @@map("price_lists")
@@ -502,6 +503,8 @@ model Warehouse {
   destinationMovements  InventoryMovement[]    @relation("MovementDestinationWarehouse")
   deliveryTrips         DeliveryTrip[]
   vehicle               Vehicle?
+  businessDefaultFor    BusinessSetting[]      @relation("BusinessDefaultWarehouse")
+  deliveryDefaultFor    BusinessSetting[]      @relation("DeliveryDefaultWarehouse")
 
   @@index([status])
   @@map("warehouses")
@@ -695,6 +698,55 @@ model DocumentSequence {
   updatedAt    DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("document_sequences")
+}
+
+model BusinessSetting {
+  id                               String        @id @default("default") @db.VarChar(32)
+  businessName                     String        @default("AquaOps") @db.VarChar(200)
+  legalName                        String?       @db.VarChar(200)
+  taxId                            String?       @db.VarChar(13)
+  branch                           String?       @db.VarChar(100)
+  addressLine                      String?       @db.VarChar(255)
+  subdistrict                      String?       @db.VarChar(100)
+  district                         String?       @db.VarChar(100)
+  province                         String?       @db.VarChar(100)
+  postalCode                       String?       @db.VarChar(10)
+  phone                            String?       @db.VarChar(32)
+  email                            String?       @db.VarChar(254)
+  website                          String?       @db.VarChar(255)
+  logoUrl                          String?       @db.VarChar(500)
+  defaultPriceListId               String?       @db.Uuid
+  defaultCreditTermDays            Int           @default(0)
+  defaultVatRate                   Decimal       @default(7) @db.Decimal(5, 2)
+  allowManualPriceOverride         Boolean       @default(true)
+  salesOrderPrefix                 String        @default("SO") @db.VarChar(8)
+  deliveryTripPrefix               String        @default("DL") @db.VarChar(8)
+  inventoryMovementPrefix          String        @default("STK") @db.VarChar(8)
+  invoicePrefix                    String        @default("INV") @db.VarChar(8)
+  billingNotePrefix                String        @default("BL") @db.VarChar(8)
+  paymentPrefix                    String        @default("PAY") @db.VarChar(8)
+  showTaxIdOnDocuments             Boolean       @default(true)
+  showAddressOnDocuments           Boolean       @default(true)
+  documentFooter                   String?       @db.VarChar(500)
+  paymentInstructions              String?       @db.VarChar(1000)
+  defaultWarehouseId               String?       @db.Uuid
+  defaultDeliverySourceWarehouseId String?       @db.Uuid
+  defaultPaymentMethod             PaymentMethod @default(BANK_TRANSFER)
+  billingInstructions              String?       @db.VarChar(500)
+  locale                           String        @default("th-TH") @db.VarChar(10)
+  currency                         String        @default("THB") @db.Char(3)
+  timezone                         String        @default("Asia/Bangkok") @db.VarChar(64)
+  version                          Int           @default(1)
+  createdAt                        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt                        DateTime      @updatedAt @db.Timestamptz(3)
+  defaultPriceList                 PriceList?    @relation(fields: [defaultPriceListId], references: [id], onDelete: SetNull)
+  defaultWarehouse                 Warehouse?    @relation("BusinessDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
+  defaultDeliverySourceWarehouse   Warehouse?    @relation("DeliveryDefaultWarehouse", fields: [defaultDeliverySourceWarehouseId], references: [id], onDelete: SetNull)
+
+  @@index([defaultPriceListId])
+  @@index([defaultWarehouseId])
+  @@index([defaultDeliverySourceWarehouseId])
+  @@map("business_settings")
 }
 
 model DeliveryTrip {

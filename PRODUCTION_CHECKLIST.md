@@ -5,7 +5,7 @@ Last verified: 2026-10-01
 ## Release gates
 
 - [x] Prisma schema validates and a fresh PostgreSQL database applies all migrations.
-- [x] Seed is idempotent and mock business data is gated by `AQUAOPS_ENABLE_DEV_SEED`.
+- [x] RBAC bootstrap is idempotent and demo data is restricted to approved isolated test targets.
 - [x] Lint, TypeScript, unit tests, database integration suites, and production build pass.
 - [x] Critical browser flows pass for real authentication/RBAC, Sales Orders, Delivery, Accounting, and responsive containment.
 - [x] Inventory ledger reconciles to `StockBalance`; negative stock and duplicate delivery postings are rejected.
@@ -15,15 +15,26 @@ Last verified: 2026-10-01
 - [x] Protected mutations validate input and enforce permissions on the server.
 - [x] No production secret or predictable bootstrap password is stored in source control.
 - [x] No known Critical or High integrity, security, or data-loss issue remains.
+- [x] Settings are typed, permission-controlled, audited, concurrency-safe, and contain no infrastructure secrets.
 
 ## Before deployment
 
 1. Back up the target PostgreSQL database and record the restore location and retention policy.
-2. Set `DATABASE_URL`, a unique `BETTER_AUTH_SECRET` of at least 32 characters, and the public absolute `BETTER_AUTH_URL` over HTTPS. Keep `AQUAOPS_AUTH_BYPASS=false` and `AQUAOPS_ENABLE_DEV_SEED=false`.
+2. Set the least-privilege runtime `DATABASE_URL`, `AQUAOPS_DATABASE_PURPOSE=shared`, a unique `BETTER_AUTH_SECRET` of at least 32 characters, and the public absolute `BETTER_AUTH_URL` over HTTPS. Keep `AQUAOPS_AUTH_BYPASS=false`.
 3. For the first OWNER only, set a non-predictable `AQUAOPS_BOOTSTRAP_EMAIL` and password of at least 12 characters, run the explicit seed, then remove the bootstrap values from the runtime environment.
-4. Run `npm ci`, `npm run db:validate`, `npm run db:deploy`, and `npm run build`. Never run `prisma migrate reset` against production.
-5. If RBAC definitions need synchronization, run `npm run db:seed` explicitly with development seed disabled. Application startup does not seed automatically.
+4. Run `npm ci`, review migration SQL, set the dedicated `MIGRATION_DATABASE_URL`, then run `npm run db:validate`, `npm run db:status`, `npm run db:deploy`, and `npm run build`. Never run `prisma migrate dev`, `migrate reset`, or forced `db push` against the shared database.
+5. If RBAC definitions need synchronization, run `npm run db:bootstrap` explicitly. Application startup does not migrate or bootstrap automatically; never run `db:seed:demo` on the shared database.
 6. Start the application, verify `GET /api/health` reports application/database health, then smoke-test login and one permission-restricted route.
+
+## Settings readiness
+
+- [ ] Business/legal information and Thai document address are configured as required.
+- [ ] VAT default and exclusive-tax behavior are verified for new Sales Orders.
+- [ ] Default Price List fallback and active default Warehouse references are verified.
+- [ ] Sales Order, Delivery, Inventory, Invoice, Billing Note, and Payment prefixes are approved; counters remain read-only.
+- [ ] Default Payment Method and document payment instructions are verified.
+- [x] Locale is `th-TH`, currency is `THB`, and timezone is `Asia/Bangkok`.
+- [x] Database/auth URLs, passwords, tokens, and credentials are not stored in Settings.
 
 ## Post-deployment integrity
 
@@ -52,11 +63,11 @@ PostgreSQL backup is an external operational responsibility. Use encrypted backu
 | Payments / AR | Accepted | Partial/final payment, duplicate submission, over-allocation, void behavior, aging, and reconciliation tested |
 | Dashboard / Reports | Accepted | Shared definitions, pagination/export boundaries, snapshot history, and cross-report totals tested |
 | Audit trail | Accepted for capture | Critical actions write immutable records; a centralized operator audit-log viewer is not yet implemented |
+| System Settings | Accepted | Typed singleton, active master-data references, future-only defaults, stable document counters, RBAC, optimistic concurrency, and old/new audit capture tested |
 
 ## Known issues
 
 - **Medium:** `/admin/audit-logs` is still a placeholder. Audit capture and record integrity are implemented, but operations cannot yet search all events from one screen.
 - **Low:** current Prisma PostgreSQL adapter test runs emit a `pg` deprecation warning for a nested interactive-transaction read. Tests pass and application code no longer intentionally runs parallel queries on one transaction client; re-evaluate before upgrading to `pg` 9.
-- **Low:** admin settings remains a placeholder and has no Phase 1 business dependency.
 
 No known Critical or High issue remains as of the verification date. Re-run the release gates after dependency, migration, authentication, inventory, accounting, or reporting changes.

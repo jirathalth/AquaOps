@@ -1,7 +1,12 @@
 import { permissionCodes } from "@/config/permissions";
+import { assertIsolatedTestRuntime } from "@/config/database-environment";
 import type { AuthorizationContext } from "@/services/authorization-core";
 
-export function isDevelopmentAuthBypass(): boolean { return process.env.NODE_ENV === "development" && process.env.AQUAOPS_AUTH_BYPASS === "true"; }
+export function isDevelopmentAuthBypass(): boolean {
+  if (process.env.AQUAOPS_AUTH_BYPASS !== "true") return false;
+  assertIsolatedTestRuntime(process.env, "Authentication bypass");
+  return true;
+}
 
 export function getDevelopmentBypassContext(): AuthorizationContext {
   const permissions = permissionCodes.filter((code) => !code.startsWith("user.") && !code.startsWith("role.") && code !== "audit_log.view" && code !== "settings.manage");

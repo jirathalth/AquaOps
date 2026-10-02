@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { findSettings } from "@/repositories/settings.repository";
 import type { DeliveryTripListQuery } from "@/validations/delivery";
 
 export type DeliveryTransaction = Prisma.TransactionClient;
@@ -27,7 +28,7 @@ export async function getDeliveryDashboardCounts(dateToday: Date, dateTomorrow: 
   ]); return { waitingOrders, plannedToday, inProgress, deliveredToday, failedPending };
 }
 
-export function listActiveDeliveryWarehouses() { return db.warehouse.findMany({ where: { status: "ACTIVE", type: "STORAGE" }, select: { id: true, code: true, name: true, isDefault: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }); }
+export async function listActiveDeliveryWarehouses() { const [rows, settings] = await Promise.all([db.warehouse.findMany({ where: { status: "ACTIVE", type: "STORAGE" }, select: { id: true, code: true, name: true, isDefault: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }), findSettings()]); const defaultId = settings?.defaultDeliverySourceWarehouseId ?? settings?.defaultWarehouseId; return rows.map((row) => ({ ...row, isDefault: defaultId ? row.id === defaultId : row.isDefault })).sort((a, b) => Number(b.isDefault) - Number(a.isDefault)); }
 export function listActiveVehicles() { return db.vehicle.findMany({ where: { status: "ACTIVE", warehouse: { status: "ACTIVE" } }, select: { id: true, code: true, registrationNumber: true, description: true, warehouseId: true, warehouse: { select: { name: true } } }, orderBy: [{ code: "asc" }] }); }
 export function listDeliveryDrivers() { return db.user.findMany({ where: { status: "ACTIVE", roles: { some: { role: { isActive: true, permissions: { some: { permission: { code: "delivery.manage" } } } } } } }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" } }); }
 export function listEligibleDeliveryOrders() { return db.salesOrder.findMany({ where: { status: { in: ["CONFIRMED", "READY"] }, shippingAddress: { not: Prisma.JsonNull }, deliveries: { none: { status: { in: [...activeDeliveryStatuses] } } } }, select: { id: true, orderNo: true, requestedDeliveryDate: true, customerNameSnapshot: true, customerCodeSnapshot: true, shippingAddress: true, saleType: true, totalAmount: true, status: true, warehouseId: true }, orderBy: [{ requestedDeliveryDate: { sort: "asc", nulls: "last" } }, { orderNo: "asc" }], take: 200 }); }
@@ -40,7 +41,7 @@ export function findActiveVehicle(id: string, tx: DeliveryTransaction) { return 
 export function findActiveDriver(id: string, tx: DeliveryTransaction) { return tx.user.findFirst({ where: { id, status: "ACTIVE", roles: { some: { role: { isActive: true, permissions: { some: { permission: { code: "delivery.manage" } } } } } } }, select: { id: true, name: true } }); }
 export function findActiveStorageWarehouse(id: string, tx: DeliveryTransaction) { return tx.warehouse.findFirst({ where: { id, status: "ACTIVE", type: "STORAGE" }, select: { id: true, name: true } }); }
 
-export async function nextDeliveryTripNumber(tx: DeliveryTransaction, yearMonth: string) { const sequence = await tx.documentSequence.upsert({ where: { key: `DL-${yearMonth}` }, create: { key: `DL-${yearMonth}`, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `DL-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
+export async function nextDeliveryTripNumber(tx: DeliveryTransaction, yearMonth: string) { const settings = await findSettings(tx); if (!settings) throw new Error("Business settings are not initialized"); const key = `DELIVERY_TRIP-${yearMonth}`; const sequence = await tx.documentSequence.upsert({ where: { key }, create: { key, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `${settings.deliveryTripPrefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
 export function createDeliveryTripRecord(tx: DeliveryTransaction, data: Prisma.DeliveryTripUncheckedCreateInput) { return tx.deliveryTrip.create({ data, select: { id: true, tripNo: true } }); }
 export function updateDeliveryTripRecord(tx: DeliveryTransaction, id: string, data: Prisma.DeliveryTripUncheckedUpdateInput) { return tx.deliveryTrip.update({ where: { id }, data, select: { id: true } }); }
 export function createDeliveryStopRecord(tx: DeliveryTransaction, data: Prisma.DeliveryStopUncheckedCreateInput) { return tx.deliveryStop.create({ data, select: { id: true, sequence: true } }); }

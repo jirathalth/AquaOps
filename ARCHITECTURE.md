@@ -77,11 +77,17 @@ CSV export is a no-store Route Handler guarded by both `report.view` and the rep
 
 ## Database strategy
 
-Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. Phase 1 business models use UUIDs, exact decimals, restrictive foreign keys, snapshot fields, an append-only inventory ledger, and invoice/payment allocations as the accounts-receivable source of truth. A singleton client prevents excess development connections. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).
+Prisma uses PostgreSQL through the `pg` driver adapter. Better Auth owns its native authentication models; application RBAC remains separate. The singleton Prisma client owns one explicitly bounded `pg` pool per process. `DATABASE_POOL_MAX` defaults to 3, with explicit idle and connection timeouts. Provider TLS stays in the PostgreSQL URL; certificate verification is not globally disabled. Schema details, integrity rules, and required transaction boundaries are documented in [DATABASE.md](./DATABASE.md).
 
 ## Production readiness
 
-Production configuration is environment-driven and validated by server-only database/auth modules. `/api/health` performs a lightweight database connectivity check without exposing configuration. Database migrations and seeds are explicit deploy operations; application startup never creates mock data. Phase 12 verification runs fresh-database migration plus idempotent seed, cross-module reconciliation tests, a production build, real-auth/RBAC browser tests, and isolated critical operational browser flows. Operational gates and recovery expectations are recorded in [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md).
+Database configuration is centrally validated and requires an explicit URL and purpose independent of `NODE_ENV`. Shared runtime, isolated test, and migration/rehearsal targets have separate credentials and guarded commands. Database migrations and bootstrap are explicit administrative operations; application startup never migrates, seeds, or creates test users. See [DATABASE_OPERATIONS.md](./DATABASE_OPERATIONS.md).
+
+## System settings
+
+Settings follow `features/settings → settings.service → settings.repository → BusinessSetting`. The known, typed singleton avoids arbitrary runtime keys and stores only business identity, future-record defaults, document presentation, master-data references, and fixed localization values. Server Actions enforce `settings.manage`; the service validates active references, uses serializable transactions plus optimistic `version` matching, and appends group-level old/new AuditLog records. Reads go through grouped service queries rather than React components querying Prisma.
+
+Document counters are independent from configurable display prefixes: sequence keys use stable document types (`SALES_ORDER`, `DELIVERY_TRIP`, `INVENTORY_MOVEMENT`, `INVOICE`, `BILLING_NOTE`, `PAYMENT`) plus `YYYYMM`. Prefix changes therefore continue the same counter and affect future documents only. Pricing fallback is Customer Override → Customer Price List → configured Price List → Product default. Settings never rewrites transaction snapshots. Environment secrets and infrastructure URLs remain outside the database; master-data modules remain authoritative for their records. See [SETTINGS.md](./SETTINGS.md).
 
 ## Authentication and authorization
 
@@ -106,7 +112,7 @@ Inactive users are rejected when Better Auth creates a session and rejected agai
 
 ## Sales orders
 
-- Monthly order numbers use an atomically incremented `DocumentSequence` key and the format `SO-YYYYMM-00001`; no `MAX + 1` query is used.
+- Monthly order numbers use the stable `SALES_ORDER-YYYYMM` counter and configured display prefix (default `SO-YYYYMM-00001`); no `MAX + 1` query is used.
 - Draft creation and editing resolve `CustomerProductPrice → PriceListItem → ProductUnit default`, then preserve the resolved and final unit prices plus source and override metadata.
 - The calculation engine rounds line gross values to two decimals, applies line discounts, allocates the document discount proportionally, then calculates exclusive line tax from the discounted taxable base. The server always recalculates persisted totals.
 - Customer code/name, credit term/limit, product name, SKU, unit name, conversion factor, and prices are transaction snapshots. Cash orders snapshot zero credit; credit orders snapshot the customer's current terms.
@@ -126,7 +132,7 @@ Inactive users are rejected when Better Auth creates a session and rejected agai
 
 ## Delivery
 
-- Monthly trip numbers use `DocumentSequence` with `DL-YYYYMM-00001`; no `MAX + 1` query is used.
+- Monthly trip numbers use the stable `DELIVERY_TRIP-YYYYMM` counter with configured display prefix (default `DL-YYYYMM-00001`); no `MAX + 1` query is used.
 - The established trip lifecycle remains `PLANNED → LOADING → IN_TRANSIT → COMPLETED`, with safe cancellation from `PLANNED` or `LOADING`. `IN_TRANSIT` is the schema-level equivalent of dispatched.
 - Assigning a confirmed order moves it to `PREPARING`. Atomic loading transfers all required base-unit quantities from the order source warehouse to the selected vehicle warehouse and moves orders to `READY`. Dispatch moves orders to `DELIVERING`.
 - Successful delivery posts one idempotent `SALE` movement from the vehicle warehouse and moves the order to `DELIVERED`. Delivery does not move the order to `COMPLETED`; invoicing/payment phases may own that future rule.

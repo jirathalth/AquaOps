@@ -1,4 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
+import { assertIsolatedTestRuntime } from "./src/config/database-environment";
+
+assertIsolatedTestRuntime(process.env, "Playwright E2E");
 
 const port = process.env.E2E_PORT ?? "3000";
 const appDirectory = process.env.E2E_APP_DIR;
