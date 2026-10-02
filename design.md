@@ -183,7 +183,7 @@ Use Tailwind's 4px spacing scale. Preferred increments are 4, 8, 12, 16, 20, 24,
 
 - Use `FilterBar`; do not construct a new toolbar treatment per feature.
 - The filter surface uses `bg-card`, `border-border/80`, `shadow-xs`, 12px padding, and 10px vertical grouping.
-- Search remains visible when useful. Full inline filters appear at `xl` and above; below `xl`, filters move into the right-side `Sheet` while actions remain available.
+- Search remains visible when useful and uses the shared `SearchInput`, including its Lucide search icon and accessible custom clear action; browser-native search decorations are suppressed. Full inline filters appear at `xl` and above; below `xl`, filters move into the right-side `Sheet` while actions remain available.
 - Show the active-filter count and a reset action when filters are applied.
 - On the narrowest screens the filter bar may use edge-to-edge top/bottom borders; from `sm` it becomes a rounded bordered surface.
 

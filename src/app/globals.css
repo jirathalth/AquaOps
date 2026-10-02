@@ -15,6 +15,7 @@ body { min-height: 100dvh; background: var(--background); color: var(--foregroun
 button, a, input, textarea, select { outline-color: var(--ring); }
 button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
 ::selection { background: color-mix(in oklab, var(--primary) 22%, transparent); }
+.search-input::-webkit-search-cancel-button, .search-input::-webkit-search-decoration { appearance: none; -webkit-appearance: none; }
 .button-filled-primary { background: var(--button-primary-background); box-shadow: var(--button-primary-shadow); color: var(--primary-foreground); }
 .button-filled-primary:hover { background: var(--button-primary-background-hover); box-shadow: var(--button-primary-shadow-hover); }
 .button-filled-primary:active { box-shadow: var(--button-primary-shadow-active); }
