@@ -1,13 +1,18 @@
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
-import { useId, useRef, useState, type ComponentProps, type HTMLAttributes } from "react";
+import { Check, ChevronDown, Minus, Plus } from "lucide-react";
+import { forwardRef, useId, useRef, useState, type ComponentProps, type HTMLAttributes, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 export { DateInput } from "@/components/ui/date-input";
 import { cn } from "@/lib/utils";
 
-export function NumberInput(props: Omit<ComponentProps<typeof Input>, "type">) { return <Input type="number" inputMode="decimal" {...props} />; }
-export function CurrencyInput({ className, disabled, ...props }: Omit<ComponentProps<typeof Input>, "type">) { return <div className="relative"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">฿</span><Input type="number" inputMode="decimal" step="0.01" readOnly={disabled} aria-disabled={disabled} className={cn("pl-8 text-right tabular-nums", disabled && "cursor-not-allowed bg-muted opacity-70", className)} {...props} /></div>; }
+type NumberInputProps = Omit<ComponentProps<typeof Input>, "type"> & { prefix?: ReactNode };
+export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(function NumberInput({ className, disabled, readOnly, prefix, onWheel, ...props }, forwardedRef) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  function change(direction: "up" | "down") { const input = inputRef.current; if (!input || disabled || readOnly) return; if (direction === "up") input.stepUp(); else input.stepDown(); input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); }
+  return <div className="relative"><Input ref={(node) => { inputRef.current = node; if (typeof forwardedRef === "function") forwardedRef(node); else if (forwardedRef) forwardedRef.current = node; }} type="number" inputMode="decimal" disabled={disabled} readOnly={readOnly} className={cn("appearance-textfield px-12 tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none", prefix && "pl-16", className)} onWheel={(event) => { event.currentTarget.blur(); onWheel?.(event); }} {...props} /><button type="button" className="absolute inset-y-0 left-0 flex size-10 items-center justify-center border-r border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 sm:size-9" aria-label="ลดค่า" disabled={disabled || readOnly} onMouseDown={(event) => event.preventDefault()} onClick={() => change("down")}><Minus className="size-4" aria-hidden="true" /></button>{prefix && <span className="pointer-events-none absolute left-11 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{prefix}</span>}<button type="button" className="absolute inset-y-0 right-0 flex size-10 items-center justify-center border-l border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 sm:size-9" aria-label="เพิ่มค่า" disabled={disabled || readOnly} onMouseDown={(event) => event.preventDefault()} onClick={() => change("up")}><Plus className="size-4" aria-hidden="true" /></button></div>;
+});
+export function CurrencyInput({ className, disabled, ...props }: Omit<ComponentProps<typeof Input>, "type">) { return <NumberInput prefix="฿" step="0.01" readOnly={disabled} aria-disabled={disabled} className={cn("text-right", disabled && "cursor-not-allowed bg-muted opacity-70", className)} {...props} />; }
 type ComboboxProps = Omit<ComponentProps<typeof Input>, "list" | "onChange"> & { options: Array<{ value: string; label: string }>; onValueChange?: (value: string) => void };
 export function Combobox({ options, onValueChange, disabled, value, ...props }: ComboboxProps) {
   const id = useId(); const inputRef = useRef<HTMLInputElement>(null); const wrapperRef = useRef<HTMLDivElement>(null); const [open, setOpen] = useState(false); const [activeIndex, setActiveIndex] = useState(-1); const [uncontrolledValue, setUncontrolledValue] = useState(""); const [search, setSearch] = useState("");
