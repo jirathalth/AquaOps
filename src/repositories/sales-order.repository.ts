@@ -5,24 +5,260 @@ import { findSettings } from "@/repositories/settings.repository";
 import type { SalesOrderListQuery } from "@/validations/sales-order";
 
 export type SalesOrderTransaction = Prisma.TransactionClient;
-const customerSelect = { id: true, code: true, displayName: true, legalName: true, type: true, status: true, phone: true, defaultSaleType: true, creditTermDays: true, creditLimit: true, billingCycle: true, billingCycleNote: true, defaultPriceListId: true, defaultPriceList: { select: { id: true, code: true, name: true } }, addresses: { orderBy: [{ isDefault: "desc" as const }, { createdAt: "asc" as const }] } } satisfies Prisma.CustomerSelect;
-const productUnitSelect = { id: true, productId: true, unitId: true, conversionFactor: true, barcode: true, isActive: true, product: { select: { id: true, sku: true, name: true, status: true, deletedAt: true } }, unit: { select: { id: true, nameTh: true, symbol: true, decimalScale: true, isActive: true } } } satisfies Prisma.ProductUnitSelect;
+const customerSelect = {
+  id: true,
+  code: true,
+  displayName: true,
+  legalName: true,
+  type: true,
+  status: true,
+  phone: true,
+  defaultSaleType: true,
+  creditTermDays: true,
+  creditLimit: true,
+  billingCycle: true,
+  billingCycleNote: true,
+  defaultPriceListId: true,
+  defaultVatRate: true,
+  defaultPriceList: { select: { id: true, code: true, name: true } },
+  addresses: {
+    orderBy: [{ isDefault: "desc" as const }, { createdAt: "asc" as const }],
+  },
+} satisfies Prisma.CustomerSelect;
+const productUnitSelect = {
+  id: true,
+  productId: true,
+  unitId: true,
+  conversionFactor: true,
+  barcode: true,
+  isActive: true,
+  product: {
+    select: { id: true, sku: true, name: true, status: true, deletedAt: true },
+  },
+  unit: {
+    select: {
+      id: true,
+      nameTh: true,
+      symbol: true,
+      decimalScale: true,
+      isActive: true,
+    },
+  },
+} satisfies Prisma.ProductUnitSelect;
 
-function orderWhere(query: SalesOrderListQuery): Prisma.SalesOrderWhereInput { return { ...(query.q ? { OR: [{ orderNo: { contains: query.q, mode: "insensitive" } }, { customerCodeSnapshot: { contains: query.q, mode: "insensitive" } }, { customerNameSnapshot: { contains: query.q, mode: "insensitive" } }, { customer: { legalName: { contains: query.q, mode: "insensitive" } } }] } : {}), ...(query.status === "ALL" ? {} : { status: query.status }), ...(query.saleType === "ALL" ? {} : { saleType: query.saleType }), ...(query.customerType === "ALL" ? {} : { customerTypeSnapshot: query.customerType }), ...((query.dateFrom || query.dateTo) ? { orderDate: { ...(query.dateFrom ? { gte: new Date(`${query.dateFrom}T00:00:00.000Z`) } : {}), ...(query.dateTo ? { lte: new Date(`${query.dateTo}T00:00:00.000Z`) } : {}) } } : {}) }; }
-export async function findSalesOrders(query: SalesOrderListQuery) { const where = orderWhere(query); const orderBy: Prisma.SalesOrderOrderByWithRelationInput = query.sort === "customer" ? { customerNameSnapshot: query.order } : { [query.sort]: query.order }; const select = { id: true, orderNo: true, orderDate: true, requestedDeliveryDate: true, customerCodeSnapshot: true, customerNameSnapshot: true, customerTypeSnapshot: true, saleType: true, status: true, totalAmount: true, updatedAt: true, createdBy: { select: { name: true } } } satisfies Prisma.SalesOrderSelect; const [rows, total] = await db.$transaction([db.salesOrder.findMany({ where, select, orderBy: [orderBy, { id: "asc" }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }), db.salesOrder.count({ where })]); return { rows, total }; }
-export function findSalesOrderById(id: string) { return db.salesOrder.findUnique({ where: { id }, include: { customer: { select: customerSelect }, warehouse: { select: { id: true, code: true, name: true } }, priceList: { select: { id: true, code: true, name: true } }, createdBy: { select: { name: true } }, items: { orderBy: { lineNo: "asc" } }, statusHistory: { orderBy: { changedAt: "desc" } } } }); }
-export function findSalesOrderForUpdate(id: string, tx: SalesOrderTransaction) { return tx.salesOrder.findUnique({ where: { id }, include: { items: { orderBy: { lineNo: "asc" } } } }); }
-export function listActiveOrderCustomers() { return db.customer.findMany({ where: { status: "ACTIVE", deletedAt: null }, select: customerSelect, orderBy: [{ displayName: "asc" }, { code: "asc" }] }); }
-export function listActiveOrderProductUnits() { return db.productUnit.findMany({ where: { isActive: true, unit: { isActive: true }, product: { status: "ACTIVE", deletedAt: null } }, select: productUnitSelect, orderBy: [{ product: { name: "asc" } }, { unit: { nameTh: "asc" } }] }); }
-export async function listActiveWarehouses() { const [rows, settings] = await Promise.all([db.warehouse.findMany({ where: { status: "ACTIVE", type: "STORAGE" }, select: { id: true, code: true, name: true, isDefault: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] }), findSettings()]); const defaultId = settings?.defaultWarehouseId; return rows.map((row) => ({ ...row, isDefault: defaultId ? row.id === defaultId : row.isDefault })).sort((a, b) => Number(b.isDefault) - Number(a.isDefault)); }
-export function findOrderCustomer(id: string, tx: SalesOrderTransaction) { return tx.customer.findFirst({ where: { id, status: "ACTIVE", deletedAt: null }, select: customerSelect }); }
-export function findOrderProductUnit(id: string, tx: SalesOrderTransaction) { return tx.productUnit.findFirst({ where: { id, isActive: true, unit: { isActive: true }, product: { status: "ACTIVE", deletedAt: null } }, select: productUnitSelect }); }
-export function findActiveWarehouse(id: string, tx: SalesOrderTransaction) { return tx.warehouse.findFirst({ where: { id, status: "ACTIVE", type: "STORAGE" }, select: { id: true } }); }
-export async function nextSalesOrderNumber(tx: SalesOrderTransaction, yearMonth: string) { const settings = await findSettings(tx); if (!settings) throw new Error("Business settings are not initialized"); const key = `SALES_ORDER-${yearMonth}`; const sequence = await tx.documentSequence.upsert({ where: { key }, create: { key, currentValue: 1 }, update: { currentValue: { increment: 1 } }, select: { currentValue: true } }); return `${settings.salesOrderPrefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`; }
-export function createSalesOrderRecord(tx: SalesOrderTransaction, data: Prisma.SalesOrderUncheckedCreateInput) { return tx.salesOrder.create({ data, select: { id: true, orderNo: true } }); }
-export function updateSalesOrderRecord(tx: SalesOrderTransaction, id: string, data: Prisma.SalesOrderUncheckedUpdateInput) { return tx.salesOrder.update({ where: { id }, data, select: { id: true } }); }
-export async function replaceSalesOrderItems(tx: SalesOrderTransaction, salesOrderId: string, items: Prisma.SalesOrderItemCreateManyInput[]) { await tx.salesOrderItem.deleteMany({ where: { salesOrderId } }); return tx.salesOrderItem.createMany({ data: items }); }
-export function createSalesOrderHistory(tx: SalesOrderTransaction, data: Prisma.SalesOrderStatusHistoryUncheckedCreateInput) { return tx.salesOrderStatusHistory.create({ data }); }
-export function createSalesOrderAuditLog(tx: SalesOrderTransaction, data: Prisma.AuditLogUncheckedCreateInput) { return tx.auditLog.create({ data }); }
-export function listSalesOrderAuditLogs(id: string) { return db.auditLog.findMany({ where: { entityType: "SalesOrder", entityId: id }, select: { id: true, action: true, actorName: true, createdAt: true, beforeData: true, afterData: true }, orderBy: { createdAt: "desc" }, take: 50 }); }
-export function withSalesOrderTransaction<T>(operation: (tx: SalesOrderTransaction) => Promise<T>) { return db.$transaction(operation, { isolationLevel: "Serializable" }); }
+function orderWhere(query: SalesOrderListQuery): Prisma.SalesOrderWhereInput {
+  return {
+    ...(query.q
+      ? {
+          OR: [
+            { orderNo: { contains: query.q, mode: "insensitive" } },
+            {
+              customerCodeSnapshot: { contains: query.q, mode: "insensitive" },
+            },
+            {
+              customerNameSnapshot: { contains: query.q, mode: "insensitive" },
+            },
+            {
+              customer: {
+                legalName: { contains: query.q, mode: "insensitive" },
+              },
+            },
+          ],
+        }
+      : {}),
+    ...(query.status === "ALL" ? {} : { status: query.status }),
+    ...(query.saleType === "ALL" ? {} : { saleType: query.saleType }),
+    ...(query.customerType === "ALL"
+      ? {}
+      : { customerTypeSnapshot: query.customerType }),
+    ...(query.dateFrom || query.dateTo
+      ? {
+          orderDate: {
+            ...(query.dateFrom
+              ? { gte: new Date(`${query.dateFrom}T00:00:00.000Z`) }
+              : {}),
+            ...(query.dateTo
+              ? { lte: new Date(`${query.dateTo}T00:00:00.000Z`) }
+              : {}),
+          },
+        }
+      : {}),
+  };
+}
+export async function findSalesOrders(query: SalesOrderListQuery) {
+  const where = orderWhere(query);
+  const orderBy: Prisma.SalesOrderOrderByWithRelationInput =
+    query.sort === "customer"
+      ? { customerNameSnapshot: query.order }
+      : { [query.sort]: query.order };
+  const select = {
+    id: true,
+    orderNo: true,
+    orderDate: true,
+    requestedDeliveryDate: true,
+    customerCodeSnapshot: true,
+    customerNameSnapshot: true,
+    customerTypeSnapshot: true,
+    saleType: true,
+    status: true,
+    totalAmount: true,
+    updatedAt: true,
+    createdBy: { select: { name: true } },
+  } satisfies Prisma.SalesOrderSelect;
+  const [rows, total] = await db.$transaction([
+    db.salesOrder.findMany({
+      where,
+      select,
+      orderBy: [orderBy, { id: "asc" }],
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    db.salesOrder.count({ where }),
+  ]);
+  return { rows, total };
+}
+export function findSalesOrderById(id: string) {
+  return db.salesOrder.findUnique({
+    where: { id },
+    include: {
+      customer: { select: customerSelect },
+      warehouse: { select: { id: true, code: true, name: true } },
+      priceList: { select: { id: true, code: true, name: true } },
+      createdBy: { select: { name: true } },
+      items: { orderBy: { lineNo: "asc" } },
+      statusHistory: { orderBy: { changedAt: "desc" } },
+    },
+  });
+}
+export function findSalesOrderForUpdate(id: string, tx: SalesOrderTransaction) {
+  return tx.salesOrder.findUnique({
+    where: { id },
+    include: { items: { orderBy: { lineNo: "asc" } } },
+  });
+}
+export function listActiveOrderCustomers() {
+  return db.customer.findMany({
+    where: { status: "ACTIVE", deletedAt: null },
+    select: customerSelect,
+    orderBy: [{ displayName: "asc" }, { code: "asc" }],
+  });
+}
+export function listActiveOrderProductUnits() {
+  return db.productUnit.findMany({
+    where: {
+      isActive: true,
+      unit: { isActive: true },
+      product: { status: "ACTIVE", deletedAt: null },
+    },
+    select: productUnitSelect,
+    orderBy: [{ product: { name: "asc" } }, { unit: { nameTh: "asc" } }],
+  });
+}
+export async function listActiveWarehouses() {
+  const [rows, settings] = await Promise.all([
+    db.warehouse.findMany({
+      where: { status: "ACTIVE", type: "STORAGE" },
+      select: { id: true, code: true, name: true, isDefault: true },
+      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+    }),
+    findSettings(),
+  ]);
+  const defaultId = settings?.defaultWarehouseId;
+  return rows
+    .map((row) => ({
+      ...row,
+      isDefault: defaultId ? row.id === defaultId : row.isDefault,
+    }))
+    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault));
+}
+export function findOrderCustomer(id: string, tx: SalesOrderTransaction) {
+  return tx.customer.findFirst({
+    where: { id, status: "ACTIVE", deletedAt: null },
+    select: customerSelect,
+  });
+}
+export function findOrderProductUnit(id: string, tx: SalesOrderTransaction) {
+  return tx.productUnit.findFirst({
+    where: {
+      id,
+      isActive: true,
+      unit: { isActive: true },
+      product: { status: "ACTIVE", deletedAt: null },
+    },
+    select: productUnitSelect,
+  });
+}
+export function findActiveWarehouse(id: string, tx: SalesOrderTransaction) {
+  return tx.warehouse.findFirst({
+    where: { id, status: "ACTIVE", type: "STORAGE" },
+    select: { id: true },
+  });
+}
+export async function nextSalesOrderNumber(
+  tx: SalesOrderTransaction,
+  yearMonth: string,
+) {
+  const settings = await findSettings(tx);
+  if (!settings) throw new Error("Business settings are not initialized");
+  const key = `SALES_ORDER-${yearMonth}`;
+  const sequence = await tx.documentSequence.upsert({
+    where: { key },
+    create: { key, currentValue: 1 },
+    update: { currentValue: { increment: 1 } },
+    select: { currentValue: true },
+  });
+  return `${settings.salesOrderPrefix}-${yearMonth}-${String(sequence.currentValue).padStart(5, "0")}`;
+}
+export function createSalesOrderRecord(
+  tx: SalesOrderTransaction,
+  data: Prisma.SalesOrderUncheckedCreateInput,
+) {
+  return tx.salesOrder.create({ data, select: { id: true, orderNo: true } });
+}
+export function updateSalesOrderRecord(
+  tx: SalesOrderTransaction,
+  id: string,
+  data: Prisma.SalesOrderUncheckedUpdateInput,
+) {
+  return tx.salesOrder.update({ where: { id }, data, select: { id: true } });
+}
+export async function replaceSalesOrderItems(
+  tx: SalesOrderTransaction,
+  salesOrderId: string,
+  items: Prisma.SalesOrderItemCreateManyInput[],
+) {
+  await tx.salesOrderItem.deleteMany({ where: { salesOrderId } });
+  return tx.salesOrderItem.createMany({ data: items });
+}
+export function createSalesOrderHistory(
+  tx: SalesOrderTransaction,
+  data: Prisma.SalesOrderStatusHistoryUncheckedCreateInput,
+) {
+  return tx.salesOrderStatusHistory.create({ data });
+}
+export function createSalesOrderAuditLog(
+  tx: SalesOrderTransaction,
+  data: Prisma.AuditLogUncheckedCreateInput,
+) {
+  return tx.auditLog.create({ data });
+}
+export function listSalesOrderAuditLogs(id: string) {
+  return db.auditLog.findMany({
+    where: { entityType: "SalesOrder", entityId: id },
+    select: {
+      id: true,
+      action: true,
+      actorName: true,
+      createdAt: true,
+      beforeData: true,
+      afterData: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+}
+export function withSalesOrderTransaction<T>(
+  operation: (tx: SalesOrderTransaction) => Promise<T>,
+) {
+  return db.$transaction(operation, { isolationLevel: "Serializable" });
+}

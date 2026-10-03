@@ -30,7 +30,7 @@ describe.skipIf(process.env.AQUAOPS_PHASE12_DB_TEST !== "true")("Phase 12 golden
     expect(overridePrice).toMatchObject({ source: "CUSTOMER_OVERRIDE", unitPrice: "42.5000" });
     expect(listPrice).toMatchObject({ source: "PRICE_LIST", unitPrice: "46.8000" });
 
-    const orderId = await createSalesOrder({ customerId: customer.id, warehouseId: warehouse.id, orderDate: "2026-10-01", requestedDeliveryDate: "2026-10-01", saleType: "CREDIT", documentDiscountAmount: "10.00", notes: "Phase 12 golden path", items: [
+    const orderId = await createSalesOrder({ customerId: customer.id, warehouseId: warehouse.id, orderDate: "2026-10-01", requestedDeliveryDate: "2026-10-01", saleType: "CREDIT", documentDiscountAmount: "10.00", taxRate: "7.00", notes: "Phase 12 golden path", items: [
       { productUnitId: overrideUnit.id, quantity: "4.000", unitPrice: overridePrice.unitPrice, resolvedUnitPrice: overridePrice.unitPrice, priceSource: overridePrice.source, discountAmount: "5.00", taxRate: "7.00" },
       { productUnitId: listUnit.id, quantity: "3.000", unitPrice: listPrice.unitPrice, resolvedUnitPrice: listPrice.unitPrice, priceSource: listPrice.source, discountAmount: "0.00", taxRate: "7.00" },
     ] }, actor, false);

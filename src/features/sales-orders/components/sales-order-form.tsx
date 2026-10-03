@@ -6,38 +6,674 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
-import { FormActions, FormField, FormSection } from "@/components/shared/form-layout";
-import { CurrencyInput, DateInput, NumberInput } from "@/components/shared/form-controls";
+import {
+  FormActions,
+  FormField,
+  FormSection,
+} from "@/components/shared/form-layout";
+import {
+  CurrencyInput,
+  DateInput,
+  NumberInput,
+} from "@/components/shared/form-controls";
 import { useToast } from "@/components/shared/toast-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { billingCycleConfig, customerTypeConfig } from "@/config/customers";
 import { paymentTypeConfig, priceSourceConfig } from "@/config/sales-orders";
-import { createSalesOrderAction, resolveSalesOrderPriceAction, updateSalesOrderAction } from "@/features/sales-orders/actions";
-import type { SalesOrderDetailData, SalesOrderOptions } from "@/features/sales-orders/types";
+import {
+  createSalesOrderAction,
+  resolveSalesOrderPriceAction,
+  updateSalesOrderAction,
+} from "@/features/sales-orders/actions";
+import type {
+  SalesOrderDetailData,
+  SalesOrderOptions,
+} from "@/features/sales-orders/types";
 import { formatCurrencyDecimal } from "@/lib/formatters";
 import { calculateSalesOrderTotals } from "@/services/sales-order-core";
-import { salesOrderFormSchema, type SalesOrderFormValues } from "@/validations/sales-order";
+import {
+  salesOrderFormSchema,
+  type SalesOrderFormValues,
+} from "@/validations/sales-order";
 
-function today() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
-const defaults = (options: SalesOrderOptions): SalesOrderFormValues => ({ customerId: "", warehouseId: options.warehouses.find((item) => item.isDefault)?.id ?? options.warehouses[0]?.id ?? "", orderDate: today(), requestedDeliveryDate: "", saleType: "CASH", documentDiscountAmount: "0.00", notes: "", items: [] });
+function today() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+const defaults = (options: SalesOrderOptions): SalesOrderFormValues => ({
+  customerId: "",
+  warehouseId:
+    options.warehouses.find((item) => item.isDefault)?.id ??
+    options.warehouses[0]?.id ??
+    "",
+  orderDate: today(),
+  requestedDeliveryDate: "",
+  saleType: "CASH",
+  documentDiscountAmount: "0.00",
+  taxRate: "0.00",
+  notes: "",
+  items: [],
+});
 const emptyItems: SalesOrderFormValues["items"] = [];
-function values(order: SalesOrderDetailData | undefined, options: SalesOrderOptions): SalesOrderFormValues { if (!order) return defaults(options); return { id: order.id, customerId: order.customerId, warehouseId: order.warehouseId, orderDate: order.orderDate, requestedDeliveryDate: order.requestedDeliveryDate, saleType: order.saleType, documentDiscountAmount: order.documentDiscountAmount, notes: order.notes, items: order.items.map(({ id, productUnitId, quantity, unitPrice, resolvedUnitPrice, priceSource, discountAmount, taxRate }) => ({ id, productUnitId, quantity, unitPrice, resolvedUnitPrice, priceSource, discountAmount, taxRate })) }; }
+function values(
+  order: SalesOrderDetailData | undefined,
+  options: SalesOrderOptions,
+): SalesOrderFormValues {
+  if (!order) return defaults(options);
+  return {
+    id: order.id,
+    customerId: order.customerId,
+    warehouseId: order.warehouseId,
+    orderDate: order.orderDate,
+    requestedDeliveryDate: order.requestedDeliveryDate,
+    saleType: order.saleType,
+    documentDiscountAmount: order.documentDiscountAmount,
+    taxRate: order.taxRate,
+    notes: order.notes,
+    items: order.items.map(
+      ({
+        id,
+        productUnitId,
+        quantity,
+        unitPrice,
+        resolvedUnitPrice,
+        priceSource,
+        discountAmount,
+      }) => ({
+        id,
+        productUnitId,
+        quantity,
+        unitPrice,
+        resolvedUnitPrice,
+        priceSource,
+        discountAmount,
+      }),
+    ),
+  };
+}
 
-export function SalesOrderForm({ options, order, canOverridePrice }: { options: SalesOrderOptions; order?: SalesOrderDetailData; canOverridePrice: boolean }) {
-  const router = useRouter(); const { toast } = useToast(); const errorRef = useRef<HTMLDivElement>(null); const [actionError, setActionError] = useState<string>(); const [customerSearch, setCustomerSearch] = useState(""); const [productSearch, setProductSearch] = useState(""); const [pricing, setPricing] = useState(false); const editing = Boolean(order);
-  const form = useForm<SalesOrderFormValues>({ resolver: zodResolver(salesOrderFormSchema), defaultValues: values(order, options) }); const fields = useFieldArray({ control: form.control, name: "items" }); const customerId = useWatch({ control: form.control, name: "customerId" }); const items = useWatch({ control: form.control, name: "items" }) ?? emptyItems; const documentDiscount = useWatch({ control: form.control, name: "documentDiscountAmount" }) || "0"; const selectedCustomer = options.customers.find((item) => item.id === customerId);
-  const customerMatches = useMemo(() => { const q = customerSearch.trim().toLowerCase(); return options.customers.filter((item) => !q || [item.code, item.displayName, item.legalName, item.phone ?? ""].some((value) => value.toLowerCase().includes(q))).slice(0, 50); }, [customerSearch, options.customers]); const productMatches = useMemo(() => { const q = productSearch.trim().toLowerCase(); const selected = new Set(items.map((item) => item.productUnitId)); return options.products.filter((item) => !selected.has(item.id) && (!q || [item.sku, item.name, item.barcode ?? ""].some((value) => value.toLowerCase().includes(q)))).slice(0, 50); }, [productSearch, options.products, items]);
-  let totals: ReturnType<typeof calculateSalesOrderTotals> | null = null; try { totals = calculateSalesOrderTotals(items.map((item) => ({ quantity: item.quantity || "0", unitPrice: item.unitPrice || "0", discountAmount: item.discountAmount || "0", taxRate: item.taxRate || "0" })), documentDiscount || "0"); } catch { totals = null; }
-  useEffect(() => { if (actionError) errorRef.current?.focus(); }, [actionError]); useEffect(() => { const handler = (event: BeforeUnloadEvent) => { if (form.formState.isDirty && !form.formState.isSubmitSuccessful) event.preventDefault(); }; window.addEventListener("beforeunload", handler); return () => window.removeEventListener("beforeunload", handler); }, [form.formState.isDirty, form.formState.isSubmitSuccessful]);
-  async function resolveLine(index: number, productUnitId: string, quantity: string, preserveOverride = false, targetCustomerId = customerId) { if (!targetCustomerId || !productUnitId || !quantity || /^0(?:\.0+)?$/.test(quantity)) return; const previous = form.getValues(`items.${index}`); if (preserveOverride && previous.id) return; setPricing(true); const result = await resolveSalesOrderPriceAction({ customerId: targetCustomerId, productUnitId, quantity }); setPricing(false); if (!result.ok) { setActionError(result.message); return; } const next = result.price.unitPrice; form.setValue(`items.${index}.resolvedUnitPrice`, next, { shouldDirty: true }); form.setValue(`items.${index}.priceSource`, result.price.source, { shouldDirty: true }); if (!preserveOverride || previous.unitPrice === previous.resolvedUnitPrice) form.setValue(`items.${index}.unitPrice`, next, { shouldDirty: true }); }
-  async function addProduct(productUnitId: string) { if (!customerId) { setActionError("กรุณาเลือกลูกค้าก่อนเพิ่มสินค้า"); return; } const index = fields.fields.length; fields.append({ productUnitId, quantity: "1.000", unitPrice: "0.0000", resolvedUnitPrice: "0.0000", priceSource: "PRODUCT_DEFAULT", discountAmount: "0.00", taxRate: options.defaults.defaultVatRate }); setProductSearch(""); await resolveLine(index, productUnitId, "1.000"); }
-  async function changeCustomer(id: string) { form.setValue("customerId", id, { shouldDirty: true, shouldValidate: true }); const customer = options.customers.find((item) => item.id === id); if (customer) form.setValue("saleType", customer.defaultSaleType, { shouldDirty: true }); for (let index = 0; index < items.length; index++) { const item = items[index]; if (item) await resolveLine(index, item.productUnitId, item.quantity, false, id); } }
-  async function submit(data: SalesOrderFormValues) { setActionError(undefined); const result = editing ? await updateSalesOrderAction(data) : await createSalesOrderAction(data); if (!result.ok) { setActionError(result.message); return; } toast({ variant: "success", title: editing ? "บันทึกคำสั่งซื้อแล้ว" : "สร้างคำสั่งซื้อฉบับร่างแล้ว" }); router.push(`/sales/orders/${result.id}`); router.refresh(); }
-  const errors = form.formState.errors; return <form className="space-y-6" onSubmit={form.handleSubmit(submit)} noValidate>{actionError && <div ref={errorRef} tabIndex={-1}><Alert variant="danger"><AlertTitle>ดำเนินการไม่สำเร็จ</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert></div>}<div className="rounded-md border border-border/80 bg-card p-4 shadow-sm sm:p-5"><div className="space-y-6"><FormSection title="ข้อมูลคำสั่งซื้อ"><FormField label="ค้นหาลูกค้า" htmlFor="order-customer-search" description="ค้นหาด้วยรหัส ชื่อ บริษัท หรือโทรศัพท์"><Input id="order-customer-search" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="พิมพ์เพื่อกรองลูกค้า" /></FormField><FormField label="ลูกค้า" htmlFor="order-customer" required error={errors.customerId?.message}><Select value={customerId || undefined} onValueChange={changeCustomer}><SelectTrigger id="order-customer"><SelectValue placeholder="เลือกลูกค้า" /></SelectTrigger><SelectContent>{customerMatches.map((customer) => <SelectItem key={customer.id} value={customer.id}>{customer.code} — {customer.displayName}</SelectItem>)}</SelectContent></Select></FormField><FormField label="คลังสินค้า" htmlFor="order-warehouse" required error={errors.warehouseId?.message}><Controller control={form.control} name="warehouseId" render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="order-warehouse"><SelectValue /></SelectTrigger><SelectContent>{options.warehouses.map((warehouse) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name} ({warehouse.code})</SelectItem>)}</SelectContent></Select>} /></FormField><FormField label="วันที่สั่งซื้อ" htmlFor="order-date" required error={errors.orderDate?.message}><DateInput {...form.register("orderDate")} /></FormField><FormField label="วันที่จัดส่ง" htmlFor="order-delivery-date" error={errors.requestedDeliveryDate?.message}><DateInput {...form.register("requestedDeliveryDate")} /></FormField><FormField label="ประเภทการชำระเงิน" htmlFor="order-payment" required error={errors.saleType?.message}><Controller control={form.control} name="saleType" render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="order-payment"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(paymentTypeConfig).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>} /></FormField></FormSection>{selectedCustomer && <section className="rounded-md border bg-muted/25 p-3" aria-label="ข้อมูลลูกค้า"><div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><span className="text-muted-foreground">ประเภท</span><p className="font-medium">{customerTypeConfig[selectedCustomer.type].th}</p></div><div><span className="text-muted-foreground">รายการราคา</span><p className="font-medium">{selectedCustomer.defaultPriceList?.name ?? "ราคามาตรฐานสินค้า"}</p></div><div><span className="text-muted-foreground">เครดิต</span><p className="font-medium tabular-nums">{selectedCustomer.creditTermDays} วัน / {formatCurrencyDecimal(selectedCustomer.creditLimit)}</p></div><div><span className="text-muted-foreground">รอบวางบิล</span><p className="font-medium">{billingCycleConfig[selectedCustomer.billingCycle as keyof typeof billingCycleConfig]?.th ?? selectedCustomer.billingCycleNote ?? "—"}</p></div></div><Button variant="link" size="sm" className="mt-1 h-auto px-0" asChild><Link href={`/customers/${selectedCustomer.id}`} target="_blank">ดูข้อมูลลูกค้า</Link></Button></section>}
-      <section><div className="mb-4"><h2 className="type-section-title">รายการสินค้า</h2><p className="type-secondary">ราคาเริ่มต้นคำนวณจากราคาพิเศษ รายการราคา และราคามาตรฐานตามลำดับ</p></div><div className="mb-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(220px,360px)]"><Input value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="ค้นหา SKU บาร์โค้ด หรือชื่อสินค้า" aria-label="ค้นหาสินค้า" /><Select value="" onValueChange={addProduct} disabled={!customerId || pricing}><SelectTrigger aria-label="เพิ่มสินค้า"><SelectValue placeholder={customerId ? "เลือกสินค้าเพื่อเพิ่ม" : "เลือกลูกค้าก่อน"} /></SelectTrigger><SelectContent>{productMatches.map((product) => <SelectItem key={product.id} value={product.id}>{product.sku} — {product.name} ({product.unitSymbol})</SelectItem>)}</SelectContent></Select></div>{fields.fields.length ? <div className="space-y-3">{fields.fields.map((field, index) => { const item = items[index]; const product = options.products.find((option) => option.id === item?.productUnitId); const line = totals?.lines[index]; const itemError = errors.items?.[index]; return <fieldset key={field.id} className="rounded-md border bg-background p-3"><legend className="sr-only">สินค้าแถวที่ {index + 1}</legend><div className="mb-3 flex items-start gap-2"><div className="min-w-0 flex-1"><p className="font-medium">{product?.name ?? "สินค้า"}</p><p className="type-caption tabular-nums">{product?.sku} · {product?.unitName}</p></div><Button type="button" size="icon" variant="ghost" className="size-9 shrink-0 text-danger" aria-label={`ลบสินค้าแถวที่ ${index + 1}`} onClick={() => fields.remove(index)}><Trash2 className="size-4" /></Button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><FormField label="จำนวน" htmlFor={`item-${index}-quantity`} required error={itemError?.quantity?.message}><NumberInput step="0.001" min="0.001" className="text-right tabular-nums" {...form.register(`items.${index}.quantity`)} onBlur={(event) => { form.register(`items.${index}.quantity`).onBlur(event); void resolveLine(index, item!.productUnitId, event.target.value, true); }} /></FormField><FormField label="ราคาต่อหน่วย" htmlFor={`item-${index}-price`} required description={item ? priceSourceConfig[item.priceSource] : undefined} error={itemError?.unitPrice?.message}><CurrencyInput step="0.0001" min="0" disabled={!canOverridePrice} {...form.register(`items.${index}.unitPrice`)} /></FormField><FormField label="ส่วนลด" htmlFor={`item-${index}-discount`} error={itemError?.discountAmount?.message}><CurrencyInput min="0" {...form.register(`items.${index}.discountAmount`)} /></FormField><FormField label="ภาษี (%)" htmlFor={`item-${index}-tax`} error={itemError?.taxRate?.message}><NumberInput min="0" max="100" step="0.01" className="text-right tabular-nums" {...form.register(`items.${index}.taxRate`)} /></FormField><div className="space-y-1.5"><span className="type-label text-muted-foreground">ยอดก่อนส่วนลด/ภาษี</span><p className="pt-2 text-right font-medium tabular-nums">{line ? formatCurrencyDecimal(line.lineSubtotal) : "—"}</p></div><div className="space-y-1.5"><span className="type-label text-muted-foreground">ยอดรวม</span><p className="pt-2 text-right font-semibold tabular-nums">{line ? formatCurrencyDecimal(line.lineTotal) : "—"}</p></div></div></fieldset>; })}</div> : <div className="rounded-md border border-dashed p-6 text-center"><p className="font-medium">ยังไม่มีสินค้าในคำสั่งซื้อ</p><p className="type-secondary">ค้นหาและเลือกสินค้าจากช่องด้านบน</p></div>}{typeof errors.items?.message === "string" && <p className="mt-2 text-xs text-danger" role="alert">{errors.items.message}</p>}</section>
-      <FormSection title="ส่วนลดและหมายเหตุ"><FormField label="ส่วนลดท้ายเอกสาร" htmlFor="order-document-discount" error={errors.documentDiscountAmount?.message}><CurrencyInput min="0" {...form.register("documentDiscountAmount")} /></FormField><FormField className="sm:col-span-2 xl:col-span-3" label="หมายเหตุ" htmlFor="order-notes" error={errors.notes?.message}><Textarea rows={3} {...form.register("notes")} /></FormField></FormSection></div></div><div className="ml-auto max-w-md rounded-md border border-border/80 bg-card p-4 shadow-sm"><dl className="space-y-2 text-sm"><div className="flex justify-between gap-4"><dt>ยอดก่อนส่วนลด/ภาษี</dt><dd className="tabular-nums">{formatCurrencyDecimal(totals?.subtotal ?? "0.00")}</dd></div><div className="flex justify-between gap-4"><dt>ส่วนลด</dt><dd className="tabular-nums">-{formatCurrencyDecimal(totals?.discountAmount ?? "0.00")}</dd></div><div className="flex justify-between gap-4"><dt>ภาษี</dt><dd className="tabular-nums">{formatCurrencyDecimal(totals?.taxAmount ?? "0.00")}</dd></div><div className="flex justify-between gap-4 border-t pt-2 text-base font-semibold"><dt>ยอดสุทธิ</dt><dd className="tabular-nums">{formatCurrencyDecimal(totals?.totalAmount ?? "0.00")}</dd></div></dl></div><FormActions><Button type="button" variant="outline" disabled={form.formState.isSubmitting} onClick={() => router.back()}>ยกเลิก</Button><Button type="submit" loading={form.formState.isSubmitting || pricing}><Plus className="size-4" aria-hidden="true" />{editing ? "บันทึกการเปลี่ยนแปลง" : "บันทึกฉบับร่าง"}</Button></FormActions></form>;
+export function SalesOrderForm({
+  options,
+  order,
+  canOverridePrice,
+}: {
+  options: SalesOrderOptions;
+  order?: SalesOrderDetailData;
+  canOverridePrice: boolean;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const errorRef = useRef<HTMLDivElement>(null);
+  const [actionError, setActionError] = useState<string>();
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [pricing, setPricing] = useState(false);
+  const editing = Boolean(order);
+  const form = useForm<SalesOrderFormValues>({
+    resolver: zodResolver(salesOrderFormSchema),
+    defaultValues: values(order, options),
+  });
+  const fields = useFieldArray({ control: form.control, name: "items" });
+  const customerId = useWatch({ control: form.control, name: "customerId" });
+  const items =
+    useWatch({ control: form.control, name: "items" }) ?? emptyItems;
+  const documentDiscount =
+    useWatch({ control: form.control, name: "documentDiscountAmount" }) || "0";
+  const taxRate = useWatch({ control: form.control, name: "taxRate" }) || "0.00";
+  const selectedCustomer = options.customers.find(
+    (item) => item.id === customerId,
+  );
+  const customerMatches = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase();
+    return options.customers
+      .filter(
+        (item) =>
+          !q ||
+          [item.code, item.displayName, item.legalName, item.phone ?? ""].some(
+            (value) => value.toLowerCase().includes(q),
+          ),
+      )
+      .slice(0, 50);
+  }, [customerSearch, options.customers]);
+  const productMatches = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    const selected = new Set(items.map((item) => item.productUnitId));
+    return options.products
+      .filter(
+        (item) =>
+          !selected.has(item.id) &&
+          (!q ||
+            [item.sku, item.name, item.barcode ?? ""].some((value) =>
+              value.toLowerCase().includes(q),
+            )),
+      )
+      .slice(0, 50);
+  }, [productSearch, options.products, items]);
+  let totals: ReturnType<typeof calculateSalesOrderTotals> | null = null;
+  try {
+    totals = calculateSalesOrderTotals(
+      items.map((item) => ({
+        quantity: item.quantity || "0",
+        unitPrice: item.unitPrice || "0",
+        discountAmount: item.discountAmount || "0",
+      })),
+      documentDiscount || "0",
+      taxRate,
+    );
+  } catch {
+    totals = null;
+  }
+  useEffect(() => {
+    if (actionError) errorRef.current?.focus();
+  }, [actionError]);
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (form.formState.isDirty && !form.formState.isSubmitSuccessful)
+        event.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [form.formState.isDirty, form.formState.isSubmitSuccessful]);
+  async function resolveLine(
+    index: number,
+    productUnitId: string,
+    quantity: string,
+    preserveOverride = false,
+    targetCustomerId = customerId,
+  ) {
+    if (
+      !targetCustomerId ||
+      !productUnitId ||
+      !quantity ||
+      /^0(?:\.0+)?$/.test(quantity)
+    )
+      return;
+    const previous = form.getValues(`items.${index}`);
+    if (preserveOverride && previous.id) return;
+    setPricing(true);
+    const result = await resolveSalesOrderPriceAction({
+      customerId: targetCustomerId,
+      productUnitId,
+      quantity,
+    });
+    setPricing(false);
+    if (!result.ok) {
+      setActionError(result.message);
+      return;
+    }
+    const next = result.price.unitPrice;
+    form.setValue(`items.${index}.resolvedUnitPrice`, next, {
+      shouldDirty: true,
+    });
+    form.setValue(`items.${index}.priceSource`, result.price.source, {
+      shouldDirty: true,
+    });
+    if (!preserveOverride || previous.unitPrice === previous.resolvedUnitPrice)
+      form.setValue(`items.${index}.unitPrice`, next, { shouldDirty: true });
+  }
+  async function addProduct(productUnitId: string) {
+    if (!customerId) {
+      setActionError("กรุณาเลือกลูกค้าก่อนเพิ่มสินค้า");
+      return;
+    }
+    const index = fields.fields.length;
+    fields.append({
+      productUnitId,
+      quantity: "1.000",
+      unitPrice: "0.0000",
+      resolvedUnitPrice: "0.0000",
+      priceSource: "PRODUCT_DEFAULT",
+      discountAmount: "0.00",
+    });
+    setProductSearch("");
+    await resolveLine(index, productUnitId, "1.000");
+  }
+  async function changeCustomer(id: string) {
+    form.setValue("customerId", id, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    const customer = options.customers.find((item) => item.id === id);
+    if (customer) {
+      form.setValue("saleType", customer.defaultSaleType, {
+        shouldDirty: true,
+      });
+      form.setValue("taxRate", customer.defaultVatRate, { shouldDirty: true, shouldValidate: true });
+    }
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index];
+      if (item)
+        await resolveLine(index, item.productUnitId, item.quantity, false, id);
+    }
+  }
+  async function submit(data: SalesOrderFormValues) {
+    setActionError(undefined);
+    const result = editing
+      ? await updateSalesOrderAction(data)
+      : await createSalesOrderAction(data);
+    if (!result.ok) {
+      setActionError(result.message);
+      return;
+    }
+    toast({
+      variant: "success",
+      title: editing ? "บันทึกคำสั่งซื้อแล้ว" : "สร้างคำสั่งซื้อฉบับร่างแล้ว",
+    });
+    router.push(`/sales/orders/${result.id}`);
+    router.refresh();
+  }
+  const errors = form.formState.errors;
+  return (
+    <form className="space-y-6" onSubmit={form.handleSubmit(submit)} noValidate>
+      {actionError && (
+        <div ref={errorRef} tabIndex={-1}>
+          <Alert variant="danger">
+            <AlertTitle>ดำเนินการไม่สำเร็จ</AlertTitle>
+            <AlertDescription>{actionError}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+      <div className="rounded-md border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+        <div className="space-y-6">
+          <FormSection title="ข้อมูลคำสั่งซื้อ">
+            <FormField
+              label="ค้นหาลูกค้า"
+              htmlFor="order-customer-search"
+              description="ค้นหาด้วยรหัส ชื่อ บริษัท หรือโทรศัพท์"
+            >
+              <Input
+                id="order-customer-search"
+                value={customerSearch}
+                onChange={(event) => setCustomerSearch(event.target.value)}
+                placeholder="พิมพ์เพื่อกรองลูกค้า"
+              />
+            </FormField>
+            <FormField
+              label="ลูกค้า"
+              htmlFor="order-customer"
+              required
+              error={errors.customerId?.message}
+            >
+              <Select
+                value={customerId || undefined}
+                onValueChange={changeCustomer}
+              >
+                <SelectTrigger id="order-customer">
+                  <SelectValue placeholder="เลือกลูกค้า" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customerMatches.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.code} — {customer.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField
+              label="คลังสินค้า"
+              htmlFor="order-warehouse"
+              required
+              error={errors.warehouseId?.message}
+            >
+              <Controller
+                control={form.control}
+                name="warehouseId"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="order-warehouse">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.warehouses.map((warehouse) => (
+                        <SelectItem key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name} ({warehouse.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FormField>
+            <FormField
+              label="วันที่สั่งซื้อ"
+              htmlFor="order-date"
+              required
+              error={errors.orderDate?.message}
+            >
+              <DateInput {...form.register("orderDate")} />
+            </FormField>
+            <FormField
+              label="วันที่จัดส่ง"
+              htmlFor="order-delivery-date"
+              error={errors.requestedDeliveryDate?.message}
+            >
+              <DateInput {...form.register("requestedDeliveryDate")} />
+            </FormField>
+            <FormField
+              label="ประเภทการชำระเงิน"
+              htmlFor="order-payment"
+              required
+              error={errors.saleType?.message}
+            >
+              <Controller
+                control={form.control}
+                name="saleType"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="order-payment">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(paymentTypeConfig).map(
+                        ([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FormField>
+          </FormSection>
+          {selectedCustomer && (
+            <section
+              className="rounded-md border bg-muted/25 p-3"
+              aria-label="ข้อมูลลูกค้า"
+            >
+              <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <span className="text-muted-foreground">ประเภท</span>
+                  <p className="font-medium">
+                    {customerTypeConfig[selectedCustomer.type].th}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">รายการราคา</span>
+                  <p className="font-medium">
+                    {selectedCustomer.defaultPriceList?.name ??
+                      "ราคามาตรฐานสินค้า"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">เครดิต</span>
+                  <p className="font-medium tabular-nums">
+                    {selectedCustomer.creditTermDays} วัน /{" "}
+                    {selectedCustomer.creditLimit === null ? "ไม่กำหนด" : formatCurrencyDecimal(selectedCustomer.creditLimit)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">รอบวางบิล</span>
+                  <p className="font-medium">
+                    {billingCycleConfig[
+                      selectedCustomer.billingCycle as keyof typeof billingCycleConfig
+                    ]?.th ??
+                      selectedCustomer.billingCycleNote ??
+                      "—"}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="link"
+                size="sm"
+                className="mt-1 h-auto px-0"
+                asChild
+              >
+                <Link
+                  href={`/customers/${selectedCustomer.id}`}
+                  target="_blank"
+                >
+                  ดูข้อมูลลูกค้า
+                </Link>
+              </Button>
+            </section>
+          )}
+          <section>
+            <div className="mb-4">
+              <h2 className="type-section-title">รายการสินค้า</h2>
+              <p className="type-secondary">
+                ราคาเริ่มต้นคำนวณจากราคาพิเศษ รายการราคา และราคามาตรฐานตามลำดับ
+              </p>
+            </div>
+            <div className="mb-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(220px,360px)]">
+              <Input
+                value={productSearch}
+                onChange={(event) => setProductSearch(event.target.value)}
+                placeholder="ค้นหา SKU บาร์โค้ด หรือชื่อสินค้า"
+                aria-label="ค้นหาสินค้า"
+              />
+              <Select
+                value=""
+                onValueChange={addProduct}
+                disabled={!customerId || pricing}
+              >
+                <SelectTrigger aria-label="เพิ่มสินค้า">
+                  <SelectValue
+                    placeholder={
+                      customerId ? "เลือกสินค้าเพื่อเพิ่ม" : "เลือกลูกค้าก่อน"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {productMatches.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.sku} — {product.name} ({product.unitSymbol})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {fields.fields.length ? (
+              <div className="space-y-3">
+                {fields.fields.map((field, index) => {
+                  const item = items[index];
+                  const product = options.products.find(
+                    (option) => option.id === item?.productUnitId,
+                  );
+                  const line = totals?.lines[index];
+                  const itemError = errors.items?.[index];
+                  return (
+                    <fieldset
+                      key={field.id}
+                      className="rounded-md border bg-background p-3"
+                    >
+                      <legend className="sr-only">
+                        สินค้าแถวที่ {index + 1}
+                      </legend>
+                      <div className="mb-3 flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium">
+                            {product?.name ?? "สินค้า"}
+                          </p>
+                          <p className="type-caption tabular-nums">
+                            {product?.sku} · {product?.unitName}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="size-9 shrink-0 text-danger"
+                          aria-label={`ลบสินค้าแถวที่ ${index + 1}`}
+                          onClick={() => fields.remove(index)}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <FormField
+                          label="จำนวน"
+                          htmlFor={`item-${index}-quantity`}
+                          required
+                          error={itemError?.quantity?.message}
+                        >
+                          <NumberInput
+                            step="0.001"
+                            min="0.001"
+                            className="text-right tabular-nums"
+                            {...form.register(`items.${index}.quantity`)}
+                            onBlur={(event) => {
+                              form
+                                .register(`items.${index}.quantity`)
+                                .onBlur(event);
+                              void resolveLine(
+                                index,
+                                item!.productUnitId,
+                                event.target.value,
+                                true,
+                              );
+                            }}
+                          />
+                        </FormField>
+                        <FormField
+                          label="ราคาต่อหน่วย"
+                          htmlFor={`item-${index}-price`}
+                          required
+                          description={
+                            item
+                              ? priceSourceConfig[item.priceSource]
+                              : undefined
+                          }
+                          error={itemError?.unitPrice?.message}
+                        >
+                          <CurrencyInput
+                            step="0.0001"
+                            min="0"
+                            disabled={!canOverridePrice}
+                            {...form.register(`items.${index}.unitPrice`)}
+                          />
+                        </FormField>
+                        <FormField
+                          label="ส่วนลด"
+                          htmlFor={`item-${index}-discount`}
+                          error={itemError?.discountAmount?.message}
+                        >
+                          <CurrencyInput
+                            min="0"
+                            {...form.register(`items.${index}.discountAmount`)}
+                          />
+                        </FormField>
+                        <div className="space-y-1.5">
+                          <span className="type-label text-muted-foreground">
+                            ยอดก่อนส่วนลด/ภาษี
+                          </span>
+                          <p className="pt-2 text-right font-medium tabular-nums">
+                            {line
+                              ? formatCurrencyDecimal(line.lineSubtotal)
+                              : "—"}
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <span className="type-label text-muted-foreground">
+                            ยอดรวม
+                          </span>
+                          <p className="pt-2 text-right font-semibold tabular-nums">
+                            {line ? formatCurrencyDecimal(line.lineTotal) : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </fieldset>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed p-6 text-center">
+                <p className="font-medium">ยังไม่มีสินค้าในคำสั่งซื้อ</p>
+                <p className="type-secondary">
+                  ค้นหาและเลือกสินค้าจากช่องด้านบน
+                </p>
+              </div>
+            )}
+            {typeof errors.items?.message === "string" && (
+              <p className="mt-2 text-xs text-danger" role="alert">
+                {errors.items.message}
+              </p>
+            )}
+          </section>
+          <FormSection title="ส่วนลดและหมายเหตุ">
+            <FormField label="ภาษีมูลค่าเพิ่ม" htmlFor="order-vat" required error={errors.taxRate?.message}>
+              <Controller control={form.control} name="taxRate" render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="order-vat"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0.00">ไม่คิด VAT</SelectItem><SelectItem value="7.00">VAT 7%</SelectItem></SelectContent></Select>} />
+            </FormField>
+            <FormField
+              label="ส่วนลดท้ายเอกสาร"
+              htmlFor="order-document-discount"
+              error={errors.documentDiscountAmount?.message}
+            >
+              <CurrencyInput
+                min="0"
+                {...form.register("documentDiscountAmount")}
+              />
+            </FormField>
+            <FormField
+              className="sm:col-span-2 xl:col-span-3"
+              label="หมายเหตุ"
+              htmlFor="order-notes"
+              error={errors.notes?.message}
+            >
+              <Textarea rows={3} {...form.register("notes")} />
+            </FormField>
+          </FormSection>
+        </div>
+      </div>
+      <div className="ml-auto max-w-md rounded-md border border-border/80 bg-card p-4 shadow-sm">
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt>ยอดก่อนส่วนลด/ภาษี</dt>
+            <dd className="tabular-nums">
+              {formatCurrencyDecimal(totals?.subtotal ?? "0.00")}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>ส่วนลด</dt>
+            <dd className="tabular-nums">
+              -{formatCurrencyDecimal(totals?.discountAmount ?? "0.00")}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4"><dt>ยอดก่อน VAT</dt><dd className="tabular-nums">{formatCurrencyDecimal(totals?.amountBeforeTax ?? "0.00")}</dd></div>
+          <div className="flex justify-between gap-4">
+            <dt>VAT {taxRate === "7.00" ? "7%" : "0%"}</dt>
+            <dd className="tabular-nums">
+              {formatCurrencyDecimal(totals?.taxAmount ?? "0.00")}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4 border-t pt-2 text-base font-semibold">
+            <dt>ยอดสุทธิ</dt>
+            <dd className="tabular-nums">
+              {formatCurrencyDecimal(totals?.totalAmount ?? "0.00")}
+            </dd>
+          </div>
+        </dl>
+      </div>
+      <FormActions>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={form.formState.isSubmitting}
+          onClick={() => router.back()}
+        >
+          ยกเลิก
+        </Button>
+        <Button type="submit" loading={form.formState.isSubmitting || pricing}>
+          <Plus className="size-4" aria-hidden="true" />
+          {editing ? "บันทึกการเปลี่ยนแปลง" : "บันทึกฉบับร่าง"}
+        </Button>
+      </FormActions>
+    </form>
+  );
 }

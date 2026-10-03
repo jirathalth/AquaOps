@@ -299,11 +299,12 @@ model Customer {
   phone              String?                @db.VarChar(32)
   email              String?                @db.VarChar(254)
   defaultSaleType    SaleType               @default(CASH)
-  creditLimit        Decimal                @default(0) @db.Decimal(14, 2)
+  creditLimit        Decimal?               @db.Decimal(14, 2)
   creditTermDays     Int                    @default(0)
   billingCycle       BillingCycle           @default(NONE)
   billingCycleNote   String?                @db.VarChar(200)
   defaultPriceListId String?                @db.Uuid
+  defaultVatRate     Decimal                @default(0) @db.Decimal(5, 2)
   notes              String?
   createdAt          DateTime               @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime               @updatedAt @db.Timestamptz(3)
@@ -609,6 +610,7 @@ model SalesOrder {
   subtotal               Decimal                   @default(0) @db.Decimal(14, 2)
   documentDiscountAmount Decimal                   @default(0) @db.Decimal(14, 2)
   discountAmount         Decimal                   @default(0) @db.Decimal(14, 2)
+  taxRate                Decimal?                  @db.Decimal(5, 2)
   taxAmount              Decimal                   @default(0) @db.Decimal(14, 2)
   totalAmount            Decimal                   @default(0) @db.Decimal(14, 2)
   notes                  String?
@@ -877,6 +879,7 @@ model Invoice {
   billingAddress         Json?
   subtotal               Decimal              @default(0) @db.Decimal(14, 2)
   discountAmount         Decimal              @default(0) @db.Decimal(14, 2)
+  taxRate                Decimal?             @db.Decimal(5, 2)
   taxAmount              Decimal              @default(0) @db.Decimal(14, 2)
   totalAmount            Decimal              @default(0) @db.Decimal(14, 2)
   notes                  String?

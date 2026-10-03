@@ -32,7 +32,7 @@ export function CustomerTable({ rows, total, pageCount, query, priceLists, canCr
     { id: "contact", header: "ผู้ติดต่อ", enableSorting: false, cell: ({ row }) => <div className="min-w-32"><p>{row.original.contactName || "—"}</p><p className="text-xs tabular-nums text-muted-foreground">{row.original.phone || "—"}</p></div> },
     { id: "priceList", header: "ราคาขาย", enableSorting: false, cell: ({ row }) => row.original.defaultPriceList?.name ?? "—" },
     { accessorKey: "creditTermDays", header: "เครดิต", enableSorting: false, meta: { align: "right" }, cell: ({ row }) => <span className="tabular-nums">{row.original.defaultSaleType === "CREDIT" ? `${row.original.creditTermDays} วัน` : saleTypeConfig.CASH.th}</span> },
-    { accessorKey: "creditLimit", header: ({ column }) => <DataTableColumnHeader column={column} title="วงเงิน" />, meta: { align: "right" }, cell: ({ row }) => <span className="tabular-nums">{formatCurrencyDecimal(row.original.creditLimit)}</span> },
+    { accessorKey: "creditLimit", header: ({ column }) => <DataTableColumnHeader column={column} title="วงเงิน" />, meta: { align: "right" }, cell: ({ row }) => <span className="tabular-nums">{row.original.creditLimit === null ? "ไม่กำหนด" : formatCurrencyDecimal(row.original.creditLimit)}</span> },
     { accessorKey: "status", header: "สถานะ", enableSorting: false, cell: ({ row }) => <StatusBadge status={row.original.status === "ACTIVE" ? "active" : "inactive"} /> },
   ], []);
   const activeFilterCount = [query.type, query.status, query.priceListId, query.credit].filter((value) => value !== "ALL").length;

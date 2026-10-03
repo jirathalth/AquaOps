@@ -4,8 +4,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Copy, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Controller, useFieldArray, useForm, useWatch, type UseFormReturn } from "react-hook-form";
-import { FormActions, FormField, FormSection } from "@/components/shared/form-layout";
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type UseFormReturn,
+} from "react-hook-form";
+import {
+  FormActions,
+  FormField,
+  FormSection,
+} from "@/components/shared/form-layout";
 import { CurrencyInput, NumberInput } from "@/components/shared/form-controls";
 import { ThaiAddressFields } from "@/components/shared/thai-address-fields";
 import { useToast } from "@/components/shared/toast-provider";
@@ -13,39 +23,794 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { addressTypeConfig, billingCycleConfig, customerTypeConfig } from "@/config/customers";
-import { createCustomerAction, updateCustomerAction } from "@/features/customers/actions";
-import type { CustomerDetailData, PriceListOption } from "@/features/customers/types";
-import { customerFormSchema, type CustomerFormValues } from "@/validations/customer";
+import {
+  addressTypeConfig,
+  billingCycleConfig,
+  customerTypeConfig,
+} from "@/config/customers";
+import {
+  createCustomerAction,
+  updateCustomerAction,
+} from "@/features/customers/actions";
+import type {
+  CustomerDetailData,
+  PriceListOption,
+} from "@/features/customers/types";
+import {
+  customerFormSchema,
+  type CustomerFormValues,
+} from "@/validations/customer";
 
-const emptyAddress = (type: "BILLING" | "SHIPPING", isDefault = true): CustomerFormValues["addresses"][number] => ({ id: "", type, label: "", contactName: "", phone: "", addressLine1: "", addressLine2: "", subdistrict: "", district: "", province: "", postalCode: "", countryCode: "TH", deliveryNotes: "", isDefault });
-const createDefaults = (defaults?: { defaultCreditTermDays: number; defaultPriceListId: string | null }): CustomerFormValues => ({ type: "RETAIL", status: "ACTIVE", displayName: "", legalName: "", taxId: "", taxBranchCode: "", contactName: "", phone: "", email: "", defaultSaleType: "CASH", creditTermDays: defaults?.defaultCreditTermDays ?? 0, creditLimit: "0.00", billingCycle: "NONE", billingCycleNote: "", defaultPriceListId: defaults?.defaultPriceListId ?? "", notes: "", addresses: [] });
-function toFormValues(customer?: CustomerDetailData, defaults?: { defaultCreditTermDays: number; defaultPriceListId: string | null }): CustomerFormValues { if (!customer) return createDefaults(defaults); return { id: customer.id, type: customer.type, status: customer.status, displayName: customer.displayName, legalName: customer.legalName === customer.displayName ? "" : customer.legalName, taxId: customer.taxId, taxBranchCode: customer.taxBranchCode, contactName: customer.contactName, phone: customer.phone, email: customer.email, defaultSaleType: customer.defaultSaleType, creditTermDays: customer.creditTermDays, creditLimit: customer.creditLimit, billingCycle: customer.billingCycle, billingCycleNote: customer.billingCycleNote, defaultPriceListId: customer.defaultPriceListId, notes: customer.notes, addresses: customer.addresses.map(({ id, type, label, contactName, phone, addressLine1, addressLine2, subdistrict, district, province, postalCode, countryCode, deliveryNotes, isDefault }) => ({ id, type, label, contactName, phone, addressLine1, addressLine2, subdistrict, district, province, postalCode, countryCode, deliveryNotes, isDefault })) }; }
+const emptyAddress = (
+  type: "BILLING" | "SHIPPING",
+  isDefault = true,
+): CustomerFormValues["addresses"][number] => ({
+  id: "",
+  type,
+  label: "",
+  contactName: "",
+  phone: "",
+  addressLine1: "",
+  addressLine2: "",
+  subdistrict: "",
+  district: "",
+  province: "",
+  postalCode: "",
+  countryCode: "TH",
+  deliveryNotes: "",
+  isDefault,
+});
+const createDefaults = (defaults?: {
+  defaultCreditTermDays: number;
+  defaultPriceListId: string | null;
+}): CustomerFormValues => ({
+  type: "RETAIL",
+  status: "ACTIVE",
+  displayName: "",
+  legalName: "",
+  taxId: "",
+  taxBranchCode: "",
+  contactName: "",
+  phone: "",
+  email: "",
+  defaultSaleType: "CASH",
+  creditTermDays: defaults?.defaultCreditTermDays ?? 0,
+  creditLimit: null,
+  billingCycle: "NONE",
+  billingCycleNote: "",
+  defaultPriceListId: defaults?.defaultPriceListId ?? "",
+  defaultVatRate: "0.00",
+  notes: "",
+  addresses: [],
+});
+function toFormValues(
+  customer?: CustomerDetailData,
+  defaults?: {
+    defaultCreditTermDays: number;
+    defaultPriceListId: string | null;
+  },
+): CustomerFormValues {
+  if (!customer) return createDefaults(defaults);
+  return {
+    id: customer.id,
+    type: customer.type,
+    status: customer.status,
+    displayName: customer.displayName,
+    legalName:
+      customer.legalName === customer.displayName ? "" : customer.legalName,
+    taxId: customer.taxId,
+    taxBranchCode: customer.taxBranchCode,
+    contactName: customer.contactName,
+    phone: customer.phone,
+    email: customer.email,
+    defaultSaleType: customer.defaultSaleType,
+    creditTermDays: customer.creditTermDays,
+    creditLimit: customer.creditLimit,
+    billingCycle: customer.billingCycle,
+    billingCycleNote: customer.billingCycleNote,
+    defaultPriceListId: customer.defaultPriceListId,
+    defaultVatRate: customer.defaultVatRate,
+    notes: customer.notes,
+    addresses: customer.addresses.map(
+      ({
+        id,
+        type,
+        label,
+        contactName,
+        phone,
+        addressLine1,
+        addressLine2,
+        subdistrict,
+        district,
+        province,
+        postalCode,
+        countryCode,
+        deliveryNotes,
+        isDefault,
+      }) => ({
+        id,
+        type,
+        label,
+        contactName,
+        phone,
+        addressLine1,
+        addressLine2,
+        subdistrict,
+        district,
+        province,
+        postalCode,
+        countryCode,
+        deliveryNotes,
+        isDefault,
+      }),
+    ),
+  };
+}
 
-export function CustomerForm({ customer, priceLists, salesDefaults }: { customer?: CustomerDetailData; priceLists: PriceListOption[]; salesDefaults?: { defaultCreditTermDays: number; defaultPriceListId: string | null } }) {
+export function CustomerForm({
+  customer,
+  priceLists,
+  salesDefaults,
+}: {
+  customer?: CustomerDetailData;
+  priceLists: PriceListOption[];
+  salesDefaults?: {
+    defaultCreditTermDays: number;
+    defaultPriceListId: string | null;
+  };
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const errorRef = useRef<HTMLDivElement>(null);
   const [actionError, setActionError] = useState<string>();
   const editing = Boolean(customer);
-  const form = useForm<CustomerFormValues>({ resolver: zodResolver(customerFormSchema), defaultValues: toFormValues(customer, salesDefaults) });
-  const addresses = useFieldArray({ control: form.control, name: "addresses", keyName: "fieldKey" });
+  const form = useForm<CustomerFormValues>({
+    resolver: zodResolver(customerFormSchema),
+    defaultValues: toFormValues(customer, salesDefaults),
+  });
+  const addresses = useFieldArray({
+    control: form.control,
+    name: "addresses",
+    keyName: "fieldKey",
+  });
   const customerType = useWatch({ control: form.control, name: "type" });
   const saleType = useWatch({ control: form.control, name: "defaultSaleType" });
-  const billingCycle = useWatch({ control: form.control, name: "billingCycle" });
-  const addressValues = useWatch({ control: form.control, name: "addresses" }) ?? [];
-  useEffect(() => { if (actionError) errorRef.current?.focus(); }, [actionError]);
-  async function submit(values: CustomerFormValues) { setActionError(undefined); const result = editing ? await updateCustomerAction(values) : await createCustomerAction(values); if (!result.ok) { setActionError(result.message); return; } toast({ variant: "success", title: editing ? "บันทึกการเปลี่ยนแปลงแล้ว" : "เพิ่มลูกค้าแล้ว" }); router.push(`/customers/${result.id}`); router.refresh(); }
-  function appendAddress(type: "BILLING" | "SHIPPING") { addresses.append(emptyAddress(type, !addressValues.some((address) => address.type === type))); }
-  function copyBillingAddress() { const billing = addressValues.find((address) => address.type === "BILLING"); if (!billing) return; const shippingIndex = addressValues.findIndex((address) => address.type === "SHIPPING" && address.isDefault); if (shippingIndex >= 0) { const id = addressValues[shippingIndex]?.id ?? ""; addresses.update(shippingIndex, { ...billing, id, type: "SHIPPING", label: billing.label || "ที่อยู่จัดส่ง", isDefault: true }); } else addresses.append({ ...billing, id: "", type: "SHIPPING", label: billing.label || "ที่อยู่จัดส่ง", isDefault: true }); }
-  function setDefaultAddress(index: number, checked: boolean) { const type = addressValues[index]?.type; if (checked && type) addressValues.forEach((address, currentIndex) => { if (address.type === type) form.setValue(`addresses.${currentIndex}.isDefault`, currentIndex === index, { shouldDirty: true }); }); else form.setValue(`addresses.${index}.isDefault`, false, { shouldDirty: true }); }
+  const billingCycle = useWatch({
+    control: form.control,
+    name: "billingCycle",
+  });
+  const creditLimit = useWatch({ control: form.control, name: "creditLimit" });
+  const hasCreditLimit = creditLimit !== null;
+  const addressValues =
+    useWatch({ control: form.control, name: "addresses" }) ?? [];
+  useEffect(() => {
+    if (actionError) errorRef.current?.focus();
+  }, [actionError]);
+  async function submit(values: CustomerFormValues) {
+    setActionError(undefined);
+    const result = editing
+      ? await updateCustomerAction(values)
+      : await createCustomerAction(values);
+    if (!result.ok) {
+      setActionError(result.message);
+      return;
+    }
+    toast({
+      variant: "success",
+      title: editing ? "บันทึกการเปลี่ยนแปลงแล้ว" : "เพิ่มลูกค้าแล้ว",
+    });
+    router.push(`/customers/${result.id}`);
+    router.refresh();
+  }
+  function appendAddress(type: "BILLING" | "SHIPPING") {
+    addresses.append(
+      emptyAddress(
+        type,
+        !addressValues.some((address) => address.type === type),
+      ),
+    );
+  }
+  function copyBillingAddress() {
+    const billing = addressValues.find((address) => address.type === "BILLING");
+    if (!billing) return;
+    const shippingIndex = addressValues.findIndex(
+      (address) => address.type === "SHIPPING" && address.isDefault,
+    );
+    if (shippingIndex >= 0) {
+      const id = addressValues[shippingIndex]?.id ?? "";
+      addresses.update(shippingIndex, {
+        ...billing,
+        id,
+        type: "SHIPPING",
+        label: billing.label || "ที่อยู่จัดส่ง",
+        isDefault: true,
+      });
+    } else
+      addresses.append({
+        ...billing,
+        id: "",
+        type: "SHIPPING",
+        label: billing.label || "ที่อยู่จัดส่ง",
+        isDefault: true,
+      });
+  }
+  function setDefaultAddress(index: number, checked: boolean) {
+    const type = addressValues[index]?.type;
+    if (checked && type)
+      addressValues.forEach((address, currentIndex) => {
+        if (address.type === type)
+          form.setValue(
+            `addresses.${currentIndex}.isDefault`,
+            currentIndex === index,
+            { shouldDirty: true },
+          );
+      });
+    else
+      form.setValue(`addresses.${index}.isDefault`, false, {
+        shouldDirty: true,
+      });
+  }
   const errors = form.formState.errors;
-  return <form className="space-y-6" onSubmit={form.handleSubmit(submit)} noValidate>{actionError && <div ref={errorRef} tabIndex={-1}><Alert variant="danger"><AlertTitle>บันทึกข้อมูลไม่สำเร็จ</AlertTitle><AlertDescription>{actionError}</AlertDescription></Alert></div>}<div className="rounded-md border border-border/80 bg-card p-4 shadow-sm sm:p-5"><div className="space-y-6"><FormSection title="ข้อมูลพื้นฐาน" description="รหัสลูกค้าจะถูกสร้างอัตโนมัติเมื่อบันทึก"><FormField label="ประเภทลูกค้า" htmlFor="customer-type" required error={errors.type?.message}><Controller name="type" control={form.control} render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="customer-type" aria-invalid={Boolean(errors.type)}><SelectValue /></SelectTrigger><SelectContent>{Object.entries(customerTypeConfig).map(([value, config]) => <SelectItem key={value} value={value}>{config.th}</SelectItem>)}</SelectContent></Select>} /></FormField><FormField label={customerType === "WHOLESALE" ? "ชื่อร้าน / กิจการ" : "ชื่อลูกค้า"} htmlFor="customer-display-name" required error={errors.displayName?.message}><Input id="customer-display-name" autoComplete="organization" aria-invalid={Boolean(errors.displayName)} {...form.register("displayName")} /></FormField></FormSection><FormSection title="ข้อมูลติดต่อ"><FormField label="ชื่อผู้ติดต่อ" htmlFor="customer-contact-name" error={errors.contactName?.message}><Input id="customer-contact-name" autoComplete="name" aria-invalid={Boolean(errors.contactName)} {...form.register("contactName")} /></FormField><FormField label="โทรศัพท์" htmlFor="customer-phone" error={errors.phone?.message}><Input id="customer-phone" type="tel" autoComplete="tel" inputMode="tel" aria-invalid={Boolean(errors.phone)} {...form.register("phone")} /></FormField><FormField label="อีเมล" htmlFor="customer-email" error={errors.email?.message}><Input id="customer-email" type="email" autoComplete="email" aria-invalid={Boolean(errors.email)} {...form.register("email")} /></FormField></FormSection><FormSection title="ข้อมูลภาษี" description="กรอกเมื่อใช้สำหรับออกเอกสารภาษี"><FormField label="ชื่อจดทะเบียน" htmlFor="customer-tax-legal-name" description="เว้นว่างได้ หากเหมือนชื่อลูกค้า" error={errors.legalName?.message}><Input id="customer-tax-legal-name" aria-invalid={Boolean(errors.legalName)} {...form.register("legalName")} /></FormField><FormField label="เลขประจำตัวผู้เสียภาษี" htmlFor="customer-tax-id" error={errors.taxId?.message}><Input id="customer-tax-id" inputMode="numeric" maxLength={13} className="tabular-nums" aria-invalid={Boolean(errors.taxId)} {...form.register("taxId")} /></FormField><FormField label="รหัสสาขา" htmlFor="customer-tax-branch" description="สำนักงานใหญ่ใช้ 00000" error={errors.taxBranchCode?.message}><Input id="customer-tax-branch" inputMode="numeric" maxLength={5} className="tabular-nums" aria-invalid={Boolean(errors.taxBranchCode)} {...form.register("taxBranchCode")} /></FormField></FormSection><FormSection title="การขายและเครดิต" description="ตั้งค่าเริ่มต้นสำหรับเอกสารขายในอนาคต"><FormField label="รูปแบบการขาย" htmlFor="customer-sale-type" required error={errors.defaultSaleType?.message}><Controller name="defaultSaleType" control={form.control} render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="customer-sale-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="CASH">เงินสด / ไม่ใช้เครดิต</SelectItem><SelectItem value="CREDIT">เครดิต</SelectItem></SelectContent></Select>} /></FormField><FormField label="ราคาขาย" htmlFor="customer-price-list" error={errors.defaultPriceListId?.message}><Controller name="defaultPriceListId" control={form.control} render={({ field }) => <Select value={field.value || "NONE"} onValueChange={(value) => field.onChange(value === "NONE" ? "" : value)}><SelectTrigger id="customer-price-list"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="NONE">ยังไม่กำหนด</SelectItem>{priceLists.map((priceList) => <SelectItem key={priceList.id} value={priceList.id}>{priceList.name} ({priceList.code})</SelectItem>)}</SelectContent></Select>} /></FormField>{saleType === "CREDIT" ? <><FormField label="เครดิต (วัน)" htmlFor="customer-credit-term" required error={errors.creditTermDays?.message}><NumberInput id="customer-credit-term" min={0} max={3650} step={1} className="tabular-nums" aria-invalid={Boolean(errors.creditTermDays)} {...form.register("creditTermDays", { valueAsNumber: true })} /></FormField><FormField label="วงเงินเครดิต" htmlFor="customer-credit-limit" required error={errors.creditLimit?.message}><CurrencyInput id="customer-credit-limit" min="0" step="0.01" aria-invalid={Boolean(errors.creditLimit)} {...form.register("creditLimit")} /></FormField><FormField label="รอบวางบิล" htmlFor="customer-billing-cycle" error={errors.billingCycle?.message}><Controller name="billingCycle" control={form.control} render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="customer-billing-cycle"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(billingCycleConfig).map(([value, config]) => <SelectItem key={value} value={value}>{config.th}</SelectItem>)}</SelectContent></Select>} /></FormField>{billingCycle === "CUSTOM" && <FormField label="รายละเอียดรอบวางบิล" htmlFor="customer-billing-note" required error={errors.billingCycleNote?.message}><Input id="customer-billing-note" aria-invalid={Boolean(errors.billingCycleNote)} {...form.register("billingCycleNote")} /></FormField>}</> : <div className="self-end rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground sm:col-span-2">ลูกค้าเงินสดจะมีเครดิต 0 วัน วงเงิน ฿0.00 และไม่มีรอบวางบิล</div>}</FormSection><FormSection title="ที่อยู่" description="เพิ่มที่อยู่วางบิลและจัดส่งได้หลายรายการ"><div className="space-y-3 sm:col-span-2 xl:col-span-3"><div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => appendAddress("BILLING")}><Plus className="size-4" />เพิ่มที่อยู่วางบิล</Button><Button type="button" size="sm" variant="outline" onClick={() => appendAddress("SHIPPING")}><Plus className="size-4" />เพิ่มที่อยู่จัดส่ง</Button><Button type="button" size="sm" variant="outline" disabled={!addressValues.some((address) => address.type === "BILLING")} onClick={copyBillingAddress}><Copy className="size-4" />คัดลอกไปที่อยู่จัดส่ง</Button></div>{errors.addresses?.root?.message && <p className="text-xs text-danger" role="alert">{errors.addresses.root.message}</p>}{addresses.fields.length ? <div className="space-y-3">{addresses.fields.map((field, index) => <AddressFields key={field.fieldKey} index={index} form={form} type={addressValues[index]?.type ?? field.type} isDefault={addressValues[index]?.isDefault ?? false} onDefaultChange={(checked) => setDefaultAddress(index, checked)} onRemove={() => addresses.remove(index)} />)}</div> : <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">ยังไม่มีที่อยู่ สามารถเพิ่มภายหลังได้</div>}</div></FormSection><FormSection title="หมายเหตุ"><FormField className="sm:col-span-2 xl:col-span-3" label="หมายเหตุภายใน" htmlFor="customer-notes" error={errors.notes?.message}><Textarea id="customer-notes" rows={4} aria-invalid={Boolean(errors.notes)} {...form.register("notes")} /></FormField></FormSection></div></div><FormActions><Button type="button" variant="outline" disabled={form.formState.isSubmitting} onClick={() => router.back()}>ยกเลิก</Button><Button type="submit" loading={form.formState.isSubmitting}>{editing ? "บันทึกการเปลี่ยนแปลง" : "เพิ่มลูกค้า"}</Button></FormActions></form>;
+  return (
+    <form className="space-y-6" onSubmit={form.handleSubmit(submit)} noValidate>
+      {actionError && (
+        <div ref={errorRef} tabIndex={-1}>
+          <Alert variant="danger">
+            <AlertTitle>บันทึกข้อมูลไม่สำเร็จ</AlertTitle>
+            <AlertDescription>{actionError}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+      <div className="rounded-md border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+        <div className="space-y-6">
+          <FormSection
+            title="ข้อมูลพื้นฐาน"
+            description="รหัสลูกค้าจะถูกสร้างอัตโนมัติเมื่อบันทึก"
+          >
+            <FormField
+              label="ประเภทลูกค้า"
+              htmlFor="customer-type"
+              required
+              error={errors.type?.message}
+            >
+              <Controller
+                name="type"
+                control={form.control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger
+                      id="customer-type"
+                      aria-invalid={Boolean(errors.type)}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(customerTypeConfig).map(
+                        ([value, config]) => (
+                          <SelectItem key={value} value={value}>
+                            {config.th}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FormField>
+            <FormField
+              label={
+                customerType === "WHOLESALE"
+                  ? "ชื่อร้าน / กิจการ"
+                  : "ชื่อลูกค้า"
+              }
+              htmlFor="customer-display-name"
+              required
+              error={errors.displayName?.message}
+            >
+              <Input
+                id="customer-display-name"
+                autoComplete="organization"
+                aria-invalid={Boolean(errors.displayName)}
+                {...form.register("displayName")}
+              />
+            </FormField>
+          </FormSection>
+          <FormSection title="ข้อมูลติดต่อ">
+            <FormField
+              label="ชื่อผู้ติดต่อ"
+              htmlFor="customer-contact-name"
+              error={errors.contactName?.message}
+            >
+              <Input
+                id="customer-contact-name"
+                autoComplete="name"
+                aria-invalid={Boolean(errors.contactName)}
+                {...form.register("contactName")}
+              />
+            </FormField>
+            <FormField
+              label="โทรศัพท์"
+              htmlFor="customer-phone"
+              error={errors.phone?.message}
+            >
+              <Input
+                id="customer-phone"
+                type="tel"
+                autoComplete="tel"
+                inputMode="tel"
+                aria-invalid={Boolean(errors.phone)}
+                {...form.register("phone")}
+              />
+            </FormField>
+            <FormField
+              label="อีเมล"
+              htmlFor="customer-email"
+              error={errors.email?.message}
+            >
+              <Input
+                id="customer-email"
+                type="email"
+                autoComplete="email"
+                aria-invalid={Boolean(errors.email)}
+                {...form.register("email")}
+              />
+            </FormField>
+          </FormSection>
+          <FormSection
+            title="ข้อมูลภาษี"
+            description="กรอกเมื่อใช้สำหรับออกเอกสารภาษี"
+          >
+            <FormField
+              label="ชื่อจดทะเบียน"
+              htmlFor="customer-tax-legal-name"
+              description="เว้นว่างได้ หากเหมือนชื่อลูกค้า"
+              error={errors.legalName?.message}
+            >
+              <Input
+                id="customer-tax-legal-name"
+                aria-invalid={Boolean(errors.legalName)}
+                {...form.register("legalName")}
+              />
+            </FormField>
+            <FormField
+              label="เลขประจำตัวผู้เสียภาษี"
+              htmlFor="customer-tax-id"
+              error={errors.taxId?.message}
+            >
+              <Input
+                id="customer-tax-id"
+                inputMode="numeric"
+                maxLength={13}
+                className="tabular-nums"
+                aria-invalid={Boolean(errors.taxId)}
+                {...form.register("taxId")}
+              />
+            </FormField>
+            <FormField
+              label="รหัสสาขา"
+              htmlFor="customer-tax-branch"
+              description="สำนักงานใหญ่ใช้ 00000"
+              error={errors.taxBranchCode?.message}
+            >
+              <Input
+                id="customer-tax-branch"
+                inputMode="numeric"
+                maxLength={5}
+                className="tabular-nums"
+                aria-invalid={Boolean(errors.taxBranchCode)}
+                {...form.register("taxBranchCode")}
+              />
+            </FormField>
+          </FormSection>
+          <FormSection
+            title="เงื่อนไขการขายและการชำระ"
+            description="ตั้งค่าเริ่มต้นสำหรับเอกสารขายในอนาคต"
+          >
+            <FormField
+              label="รูปแบบการขาย"
+              htmlFor="customer-sale-type"
+              required
+              error={errors.defaultSaleType?.message}
+            >
+              <Controller
+                name="defaultSaleType"
+                control={form.control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="customer-sale-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CASH">
+                        ชำระทันที / เงินสด
+                      </SelectItem>
+                      <SelectItem value="CREDIT">วางบิล</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FormField>
+            <FormField
+              label="ราคาขาย"
+              htmlFor="customer-price-list"
+              error={errors.defaultPriceListId?.message}
+            >
+              <Controller
+                name="defaultPriceListId"
+                control={form.control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value || "NONE"}
+                    onValueChange={(value) =>
+                      field.onChange(value === "NONE" ? "" : value)
+                    }
+                  >
+                    <SelectTrigger id="customer-price-list">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">ยังไม่กำหนด</SelectItem>
+                      {priceLists.map((priceList) => (
+                        <SelectItem key={priceList.id} value={priceList.id}>
+                          {priceList.name} ({priceList.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FormField>
+            <FormField label="ภาษีมูลค่าเพิ่ม" htmlFor="customer-vat" required error={errors.defaultVatRate?.message}>
+              <Controller name="defaultVatRate" control={form.control} render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="customer-vat"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0.00">ไม่คิด VAT</SelectItem><SelectItem value="7.00">VAT 7%</SelectItem></SelectContent></Select>} />
+            </FormField>
+            {saleType === "CREDIT" ? (
+              <>
+                <FormField
+                  label="กำหนดชำระ (วัน)"
+                  htmlFor="customer-credit-term"
+                  required
+                  error={errors.creditTermDays?.message}
+                >
+                  <NumberInput
+                    id="customer-credit-term"
+                    min={0}
+                    max={3650}
+                    step={1}
+                    className="tabular-nums"
+                    aria-invalid={Boolean(errors.creditTermDays)}
+                    {...form.register("creditTermDays", {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </FormField>
+                <FormField
+                  label="รอบวางบิล"
+                  htmlFor="customer-billing-cycle"
+                  error={errors.billingCycle?.message}
+                >
+                  <Controller
+                    name="billingCycle"
+                    control={form.control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger id="customer-billing-cycle">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(billingCycleConfig).map(
+                            ([value, config]) => (
+                              <SelectItem key={value} value={value}>
+                                {config.th}
+                              </SelectItem>
+                            ),
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </FormField>
+                <div className="flex min-h-9 items-center sm:col-span-2 xl:col-span-3">
+                  <Checkbox
+                    id="customer-has-credit-limit"
+                    checked={hasCreditLimit}
+                    onCheckedChange={(checked) => form.setValue("creditLimit", checked ? "" : null, { shouldDirty: true, shouldValidate: true })}
+                  />
+                  <label htmlFor="customer-has-credit-limit" className="ml-2 text-sm font-medium">
+                    กำหนดวงเงินเครดิต
+                  </label>
+                </div>
+                {hasCreditLimit && (
+                  <FormField
+                    label="วงเงินเครดิต"
+                    htmlFor="customer-credit-limit"
+                    required
+                    error={errors.creditLimit?.message}
+                  >
+                    <Controller
+                      name="creditLimit"
+                      control={form.control}
+                      render={({ field }) => (
+                        <CurrencyInput
+                          id="customer-credit-limit"
+                          min="0.01"
+                          step="0.01"
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          aria-invalid={Boolean(errors.creditLimit)}
+                        />
+                      )}
+                    />
+                  </FormField>
+                )}
+                {billingCycle === "CUSTOM" && (
+                  <FormField
+                    label="รายละเอียดรอบวางบิล"
+                    htmlFor="customer-billing-note"
+                    required
+                    error={errors.billingCycleNote?.message}
+                  >
+                    <Input
+                      id="customer-billing-note"
+                      aria-invalid={Boolean(errors.billingCycleNote)}
+                      {...form.register("billingCycleNote")}
+                    />
+                  </FormField>
+                )}
+              </>
+            ) : (
+              <div className="self-end rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground sm:col-span-2">
+                ลูกค้าชำระทันทีไม่มีรอบวางบิล กำหนดชำระ หรือวงเงินเครดิต
+              </div>
+            )}
+          </FormSection>
+          <FormSection
+            title="ที่อยู่"
+            description="เพิ่มที่อยู่วางบิลและจัดส่งได้หลายรายการ"
+          >
+            <div className="space-y-3 sm:col-span-2 xl:col-span-3">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => appendAddress("BILLING")}
+                >
+                  <Plus className="size-4" />
+                  เพิ่มที่อยู่วางบิล
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => appendAddress("SHIPPING")}
+                >
+                  <Plus className="size-4" />
+                  เพิ่มที่อยู่จัดส่ง
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    !addressValues.some((address) => address.type === "BILLING")
+                  }
+                  onClick={copyBillingAddress}
+                >
+                  <Copy className="size-4" />
+                  คัดลอกไปที่อยู่จัดส่ง
+                </Button>
+              </div>
+              {errors.addresses?.root?.message && (
+                <p className="text-xs text-danger" role="alert">
+                  {errors.addresses.root.message}
+                </p>
+              )}
+              {addresses.fields.length ? (
+                <div className="space-y-3">
+                  {addresses.fields.map((field, index) => (
+                    <AddressFields
+                      key={field.fieldKey}
+                      index={index}
+                      form={form}
+                      type={addressValues[index]?.type ?? field.type}
+                      isDefault={addressValues[index]?.isDefault ?? false}
+                      onDefaultChange={(checked) =>
+                        setDefaultAddress(index, checked)
+                      }
+                      onRemove={() => addresses.remove(index)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                  ยังไม่มีที่อยู่ สามารถเพิ่มภายหลังได้
+                </div>
+              )}
+            </div>
+          </FormSection>
+          <FormSection title="หมายเหตุ">
+            <FormField
+              className="sm:col-span-2 xl:col-span-3"
+              label="หมายเหตุภายใน"
+              htmlFor="customer-notes"
+              error={errors.notes?.message}
+            >
+              <Textarea
+                id="customer-notes"
+                rows={4}
+                aria-invalid={Boolean(errors.notes)}
+                {...form.register("notes")}
+              />
+            </FormField>
+          </FormSection>
+        </div>
+      </div>
+      <FormActions>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={form.formState.isSubmitting}
+          onClick={() => router.back()}
+        >
+          ยกเลิก
+        </Button>
+        <Button type="submit" loading={form.formState.isSubmitting}>
+          {editing ? "บันทึกการเปลี่ยนแปลง" : "เพิ่มลูกค้า"}
+        </Button>
+      </FormActions>
+    </form>
+  );
 }
 
-function AddressFields({ index, form, type, isDefault, onDefaultChange, onRemove }: { index: number; form: UseFormReturn<CustomerFormValues>; type: "BILLING" | "SHIPPING"; isDefault: boolean; onDefaultChange: (checked: boolean) => void; onRemove: () => void }) {
+function AddressFields({
+  index,
+  form,
+  type,
+  isDefault,
+  onDefaultChange,
+  onRemove,
+}: {
+  index: number;
+  form: UseFormReturn<CustomerFormValues>;
+  type: "BILLING" | "SHIPPING";
+  isDefault: boolean;
+  onDefaultChange: (checked: boolean) => void;
+  onRemove: () => void;
+}) {
   const errors = form.formState.errors.addresses?.[index];
-  return <fieldset className="rounded-md border bg-background p-3 sm:p-4"><legend className="sr-only">{addressTypeConfig[type].th}</legend><input type="hidden" {...form.register(`addresses.${index}.type`)} /><input type="hidden" {...form.register(`addresses.${index}.id`)} /><div className="mb-3 flex flex-wrap items-center gap-2"><span className="text-sm font-semibold">{addressTypeConfig[type].th}</span><label className="ml-auto flex items-center gap-2 text-sm"><Checkbox checked={isDefault} onCheckedChange={(checked) => onDefaultChange(Boolean(checked))} />ที่อยู่หลัก</label><Button type="button" size="icon" variant="ghost" className="size-8 text-danger" aria-label={`ลบ${addressTypeConfig[type].th}`} onClick={onRemove}><Trash2 className="size-4" /></Button></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><FormField label="ชื่อเรียก" htmlFor={`address-${index}-label`} error={errors?.label?.message}><Input id={`address-${index}-label`} placeholder="เช่น สำนักงานใหญ่" {...form.register(`addresses.${index}.label`)} /></FormField><FormField label="ชื่อผู้รับ / ผู้ติดต่อ" htmlFor={`address-${index}-contact`} error={errors?.contactName?.message}><Input id={`address-${index}-contact`} {...form.register(`addresses.${index}.contactName`)} /></FormField><FormField label="โทรศัพท์" htmlFor={`address-${index}-phone`} error={errors?.phone?.message}><Input id={`address-${index}-phone`} type="tel" inputMode="tel" {...form.register(`addresses.${index}.phone`)} /></FormField><FormField className="sm:col-span-2 xl:col-span-3" label="ที่อยู่" htmlFor={`address-${index}-line1`} required error={errors?.addressLine1?.message}><Input id={`address-${index}-line1`} aria-invalid={Boolean(errors?.addressLine1)} {...form.register(`addresses.${index}.addressLine1`)} /></FormField><FormField className="sm:col-span-2 xl:col-span-3" label="รายละเอียดเพิ่มเติม" htmlFor={`address-${index}-line2`} error={errors?.addressLine2?.message}><Input id={`address-${index}-line2`} {...form.register(`addresses.${index}.addressLine2`)} /></FormField><ThaiAddressFields idPrefix={`address-${index}`} value={{ province: form.watch(`addresses.${index}.province`), district: form.watch(`addresses.${index}.district`), subdistrict: form.watch(`addresses.${index}.subdistrict`), postalCode: form.watch(`addresses.${index}.postalCode`) }} errors={{ province: errors?.province?.message, district: errors?.district?.message, subdistrict: errors?.subdistrict?.message, postalCode: errors?.postalCode?.message }} onChange={(changes) => { for (const [field, fieldValue] of Object.entries(changes)) form.setValue(`addresses.${index}.${field as "province" | "district" | "subdistrict" | "postalCode"}`, fieldValue, { shouldDirty: true, shouldValidate: true }); }} />{type === "SHIPPING" && <FormField className="sm:col-span-2" label="คำแนะนำการจัดส่ง" htmlFor={`address-${index}-delivery-notes`} error={errors?.deliveryNotes?.message}><Input id={`address-${index}-delivery-notes`} {...form.register(`addresses.${index}.deliveryNotes`)} /></FormField>}</div></fieldset>;
+  return (
+    <fieldset className="rounded-md border bg-background p-3 sm:p-4">
+      <legend className="sr-only">{addressTypeConfig[type].th}</legend>
+      <input type="hidden" {...form.register(`addresses.${index}.type`)} />
+      <input type="hidden" {...form.register(`addresses.${index}.id`)} />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold">
+          {addressTypeConfig[type].th}
+        </span>
+        <label className="ml-auto flex items-center gap-2 text-sm">
+          <Checkbox
+            checked={isDefault}
+            onCheckedChange={(checked) => onDefaultChange(Boolean(checked))}
+          />
+          ที่อยู่หลัก
+        </label>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-8 text-danger"
+          aria-label={`ลบ${addressTypeConfig[type].th}`}
+          onClick={onRemove}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <FormField
+          label="ชื่อเรียก"
+          htmlFor={`address-${index}-label`}
+          error={errors?.label?.message}
+        >
+          <Input
+            id={`address-${index}-label`}
+            placeholder="เช่น สำนักงานใหญ่"
+            {...form.register(`addresses.${index}.label`)}
+          />
+        </FormField>
+        <FormField
+          label="ชื่อผู้รับ / ผู้ติดต่อ"
+          htmlFor={`address-${index}-contact`}
+          error={errors?.contactName?.message}
+        >
+          <Input
+            id={`address-${index}-contact`}
+            {...form.register(`addresses.${index}.contactName`)}
+          />
+        </FormField>
+        <FormField
+          label="โทรศัพท์"
+          htmlFor={`address-${index}-phone`}
+          error={errors?.phone?.message}
+        >
+          <Input
+            id={`address-${index}-phone`}
+            type="tel"
+            inputMode="tel"
+            {...form.register(`addresses.${index}.phone`)}
+          />
+        </FormField>
+        <FormField
+          className="sm:col-span-2 xl:col-span-3"
+          label="ที่อยู่"
+          htmlFor={`address-${index}-line1`}
+          required
+          error={errors?.addressLine1?.message}
+        >
+          <Input
+            id={`address-${index}-line1`}
+            aria-invalid={Boolean(errors?.addressLine1)}
+            {...form.register(`addresses.${index}.addressLine1`)}
+          />
+        </FormField>
+        <FormField
+          className="sm:col-span-2 xl:col-span-3"
+          label="รายละเอียดเพิ่มเติม"
+          htmlFor={`address-${index}-line2`}
+          error={errors?.addressLine2?.message}
+        >
+          <Input
+            id={`address-${index}-line2`}
+            {...form.register(`addresses.${index}.addressLine2`)}
+          />
+        </FormField>
+        <ThaiAddressFields
+          idPrefix={`address-${index}`}
+          value={{
+            province: form.watch(`addresses.${index}.province`),
+            district: form.watch(`addresses.${index}.district`),
+            subdistrict: form.watch(`addresses.${index}.subdistrict`),
+            postalCode: form.watch(`addresses.${index}.postalCode`),
+          }}
+          errors={{
+            province: errors?.province?.message,
+            district: errors?.district?.message,
+            subdistrict: errors?.subdistrict?.message,
+            postalCode: errors?.postalCode?.message,
+          }}
+          onChange={(changes) => {
+            for (const [field, fieldValue] of Object.entries(changes))
+              form.setValue(
+                `addresses.${index}.${field as "province" | "district" | "subdistrict" | "postalCode"}`,
+                fieldValue,
+                { shouldDirty: true, shouldValidate: true },
+              );
+          }}
+        />
+        {type === "SHIPPING" && (
+          <FormField
+            className="sm:col-span-2"
+            label="คำแนะนำการจัดส่ง"
+            htmlFor={`address-${index}-delivery-notes`}
+            error={errors?.deliveryNotes?.message}
+          >
+            <Input
+              id={`address-${index}-delivery-notes`}
+              {...form.register(`addresses.${index}.deliveryNotes`)}
+            />
+          </FormField>
+        )}
+      </div>
+    </fieldset>
+  );
 }

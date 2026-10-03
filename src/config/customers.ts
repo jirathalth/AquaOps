@@ -14,8 +14,8 @@ export const addressTypeConfig = {
 } as const;
 
 export const saleTypeConfig = {
-  CASH: { th: "เงินสด / ไม่มีเครดิต", en: "Cash / no credit" },
-  CREDIT: { th: "ลูกค้าเครดิต", en: "Credit customer" },
+  CASH: { th: "ชำระทันที / เงินสด", en: "Immediate payment / cash" },
+  CREDIT: { th: "วางบิล", en: "Billing" },
 } as const;
 
 export const billingCycleConfig = {

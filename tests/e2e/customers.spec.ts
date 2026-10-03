@@ -50,4 +50,18 @@ test.describe("customer management", () => {
     await page.reload();
     await expect(page.locator("html")).toHaveClass(/dark/);
   });
+
+  test("billing customers can omit a credit limit", async ({ page }) => {
+    await page.goto("/customers/new");
+    await page.getByLabel("รูปแบบการขาย").click();
+    await page.getByRole("option", { name: "วางบิล", exact: true }).click();
+    await expect(page.getByLabel("กำหนดชำระ (วัน)")).toBeVisible();
+    await expect(page.getByLabel("รอบวางบิล")).toBeVisible();
+    await expect(page.getByLabel("กำหนดวงเงินเครดิต")).not.toBeChecked();
+    await expect(page.getByLabel("วงเงินเครดิต")).toHaveCount(0);
+    await page.getByLabel("กำหนดวงเงินเครดิต").check();
+    await expect(page.getByLabel("วงเงินเครดิต")).toBeVisible();
+    await page.getByLabel("กำหนดวงเงินเครดิต").uncheck();
+    await expect(page.getByLabel("วงเงินเครดิต")).toHaveCount(0);
+  });
 });
