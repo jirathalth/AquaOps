@@ -1,0 +1,56 @@
+@page { size: A5 landscape; margin: 6mm; }
+.preview { min-height: 100dvh; background: var(--background); padding: 20px; color: #172033; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; width: min(210mm, 100%); margin: 0 auto 16px; }
+.sheet { display: flex; flex-direction: column; box-sizing: border-box; width: 210mm; min-height: 148mm; margin: 0 auto; padding: 6mm; overflow: hidden; background: #fff; box-shadow: 0 8px 28px rgb(15 23 42 / 14%); color: #172033; font-family: var(--font-ibm-plex-sans-thai), "IBM Plex Sans Thai", sans-serif; font-size: 9pt; line-height: 1.42; }
+.header { display: grid; grid-template-columns: minmax(0, 1fr) 58mm; gap: 8mm; align-items: start; padding-bottom: 3mm; border-bottom: 0.25mm solid #cbd5e1; break-inside: avoid; }
+.businessIdentity { display: flex; min-width: 0; gap: 4mm; }
+.logo { width: 22mm; height: 14mm; object-fit: contain; object-position: left top; }
+.businessDetails { min-width: 0; }
+.businessName { font-size: 13pt; font-weight: 700; line-height: 1.25; }
+.businessIdentity p { margin: 0; overflow-wrap: anywhere; }
+.inlineDetails { display: flex; flex-wrap: wrap; gap: 0 4mm; color: #475569; }
+.documentIdentity { text-align: right; }
+.documentIdentity h1 { margin: 0; font-size: 18pt; font-weight: 700; line-height: 1.2; }
+.subtitle { margin: 0.5mm 0 1mm; color: #475569; font-size: 8pt; font-weight: 600; letter-spacing: 0.08em; }
+.documentNumber { margin: 0; font-size: 10pt; font-weight: 600; font-variant-numeric: tabular-nums; }
+.copyLabel { margin: 0 0 1mm; font-size: 8pt; font-weight: 600; }
+.status { display: inline-block; margin: 1mm 0 0; border: 0.25mm solid #64748b; padding: 0.5mm 2mm; font-size: 8pt; font-weight: 600; }
+.information { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(64mm, 1fr); gap: 6mm; padding: 3mm 0; break-inside: avoid; }
+.information h2 { margin: 0 0 1mm; color: #475569; font-size: 8pt; font-weight: 600; }
+.customer p { margin: 0; overflow-wrap: anywhere; }
+.customerName { font-size: 10pt; font-weight: 600; }
+.metadata { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 0.5mm; margin: 0; }
+.metadata div { display: grid; grid-template-columns: minmax(22mm, auto) 1fr; gap: 2mm; }
+.metadata dt { color: #475569; }
+.metadata dd { min-width: 0; margin: 0; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.table { width: 100%; border-collapse: separate; border-spacing: 0; border: 0.25mm solid #cbd5e1; border-radius: 2mm; overflow: hidden; table-layout: fixed; font-size: 9pt; }
+.table thead { display: table-header-group; }
+.table tr { break-inside: avoid; page-break-inside: avoid; }
+.table th { background: #f1f5f9; padding: 1.2mm 2mm; color: #334155; font-weight: 600; text-align: left; vertical-align: middle; }
+.table td { padding: 1.2mm 2mm; vertical-align: top; overflow-wrap: anywhere; }
+.table th:not(:last-child), .table td:not(:last-child) { border-right: 0.25mm solid #cbd5e1; }
+.table thead th { border-bottom: 0.25mm solid #94a3b8; }
+.left { text-align: left !important; }
+.center { text-align: center !important; }
+.right { text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.summary { display: grid; grid-template-columns: minmax(0, 1fr) 68mm; gap: 6mm; align-items: start; margin-top: auto; padding-top: 3mm; break-inside: avoid; }
+.summaryText { display: flex; flex-direction: column; align-self: stretch; }
+.summaryText p { margin: 0; }
+.summaryText span { display: block; color: #475569; font-size: 8pt; }
+.summaryText strong { font-weight: 600; }
+.totals { margin: 0; }
+.totals div { display: flex; justify-content: space-between; gap: 5mm; padding: 0.7mm 0; }
+.totals dd { margin: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grandTotal { margin-top: 1mm; border-top: 0.35mm solid #475569; padding-top: 1.5mm !important; font-size: 10pt; font-weight: 700; }
+.footer { margin-top: 5mm; break-inside: avoid; }
+.footer:empty { display: none; }
+.signatures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7mm; }
+.summarySignatures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7mm; max-width: 104mm; margin-top: auto; padding-top: 3mm; }
+.signature { text-align: center; }
+.signatureCard { border: 0.25mm solid #cbd5e1; border-radius: 1.5mm; padding: 7mm 3mm 2.5mm; }
+.signatureLine { display: block; margin-bottom: 2mm; border-top: 0.25mm solid #64748b; }
+.signature > .signatureRole { margin: 1mm 0 0; font-weight: 600; }
+.signatureDetail { margin: 0; margin-top: 5mm; color: #475569; font-size: 7.5pt; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.footerNote { margin: 3mm 0 0; border-top: 0.25mm solid #cbd5e1; padding-top: 1.5mm; color: #475569; font-size: 7.5pt; text-align: center; }
+@media (max-width: 860px) { .preview { overflow-x: auto; padding: 12px; } .sheet { margin: 0; } .actions { width: 210mm; justify-content: flex-start; } }
+@media print { .preview { min-height: 0; padding: 0; background: #fff; } .actions { display: none !important; } .sheet { width: auto; min-height: 136mm; margin: 0; padding: 0; overflow: visible; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; } }

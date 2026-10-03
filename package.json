@@ -23,6 +23,7 @@
     "test:e2e:auth": "tsx scripts/run-auth-e2e.mjs",
     "test:e2e:delivery": "tsx scripts/run-delivery-e2e.mjs",
     "test:e2e:accounting": "tsx scripts/run-accounting-e2e.mjs",
+    "test:e2e:print": "tsx scripts/run-print-e2e.mjs",
     "test:e2e:phase12": "tsx scripts/run-phase12-e2e.mjs",
     "test:e2e:settings": "tsx scripts/run-settings-e2e.mjs",
     "env:check": "tsx scripts/check-database-environment.mjs",
