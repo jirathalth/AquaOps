@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { LockKeyhole, Pencil, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { LockKeyhole, Pencil } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { DataTable } from "@/components/shared/data-table";
@@ -29,8 +29,11 @@ const permissionGroups = Object.entries(Object.groupBy(permissionRegistry, ({ gr
 
 export function RoleManagement({ roles, canManage }: { roles: RoleRow[]; canManage: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [editing, setEditing] = useState<RoleRow | null | undefined>();
+  const activeEditing = canManage && searchParams.get("create") === "1" ? null : editing;
+  function closeDialog() { setEditing(undefined); if (searchParams.get("create") === "1") router.replace("/admin/roles"); }
   const columns: ColumnDef<RoleRow>[] = [
     { id: "identity", accessorFn: (row) => `${row.name} ${row.code}`, header: "บทบาท", cell: ({ row }) => <div className="min-w-44"><div className="flex items-center gap-1.5"><span className="font-medium">{row.original.name}</span>{row.original.isSystem && <LockKeyhole className="size-3.5 text-muted-foreground" aria-label="บทบาทระบบ" />}</div><p className="text-xs text-muted-foreground">{row.original.code}</p></div> },
     { accessorKey: "description", header: "คำอธิบาย", cell: ({ row }) => <span className="line-clamp-2 max-w-lg text-muted-foreground">{row.original.description || "—"}</span> },
@@ -39,7 +42,7 @@ export function RoleManagement({ roles, canManage }: { roles: RoleRow[]; canMana
     { accessorKey: "isActive", header: "สถานะ", cell: ({ row }) => <StatusBadge status={row.original.isActive ? "active" : "inactive"} /> },
     { id: "actions", header: () => <span className="sr-only">การทำงาน</span>, meta: { align: "right" }, cell: ({ row }) => canManage && !row.original.isSystem ? <Button variant="ghost" size="icon" aria-label={`แก้ไข ${row.original.name}`} onClick={(event) => { event.stopPropagation(); setEditing(row.original); }}><Pencil className="size-4" /></Button> : <Badge variant="outline">{row.original.isSystem ? "ระบบ" : "ดูอย่างเดียว"}</Badge> },
   ];
-  return <><DataTable columns={columns} data={roles} searchPlaceholder="ค้นหาบทบาท..." emptyTitle="ยังไม่มีบทบาท" emptyDescription="สร้างบทบาทเพื่อกำหนดชุดสิทธิ์" toolbarActions={canManage ? <Button size="sm" onClick={() => setEditing(null)}><Plus className="size-4" />เพิ่มบทบาท</Button> : undefined} /><RoleDialog key={editing === undefined ? "closed" : editing?.id ?? "new"} open={editing !== undefined} role={editing ?? null} onOpenChange={(open) => { if (!open) setEditing(undefined); }} onSaved={() => { setEditing(undefined); toast({ variant: "success", title: "บันทึกบทบาทแล้ว" }); router.refresh(); }} /></>;
+  return <><DataTable columns={columns} data={roles} searchPlaceholder="ค้นหาบทบาท..." emptyTitle="ยังไม่มีบทบาท" emptyDescription="สร้างบทบาทเพื่อกำหนดชุดสิทธิ์" emptyAction={canManage ? <Button onClick={() => setEditing(null)}>เพิ่มบทบาท</Button> : undefined} /><RoleDialog key={activeEditing === undefined ? "closed" : activeEditing?.id ?? "new"} open={activeEditing !== undefined} role={activeEditing ?? null} onOpenChange={(open) => { if (!open) closeDialog(); }} onSaved={() => { closeDialog(); toast({ variant: "success", title: "บันทึกบทบาทแล้ว" }); router.refresh(); }} /></>;
 }
 
 function RoleDialog({ open, role, onOpenChange, onSaved }: { open: boolean; role: RoleRow | null; onOpenChange: (open: boolean) => void; onSaved: () => void }) {

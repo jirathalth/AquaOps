@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Controller, useForm, useWatch, type FieldErrors } from "react-hook-form";
 import { DataTable } from "@/components/shared/data-table";
@@ -30,10 +30,13 @@ const userFormSchema = userCreateSchema.or(userUpdateSchema);
 
 export function UserManagement({ users, roles, currentUserId, permissions }: { users: UserRow[]; roles: RoleOption[]; currentUserId: string; permissions: PermissionCode[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [editing, setEditing] = useState<UserRow | null | undefined>();
   const canCreate = permissions.includes("user.create") && permissions.includes("role.manage");
   const canEdit = permissions.includes("user.update") && permissions.includes("role.manage");
+  const activeEditing = canCreate && searchParams.get("create") === "1" ? null : editing;
+  function closeDialog() { setEditing(undefined); if (searchParams.get("create") === "1") router.replace("/admin/users"); }
   const columns: ColumnDef<UserRow>[] = [
     { id: "identity", accessorFn: (row) => `${row.name} ${row.email}`, header: ({ column }) => <DataTableColumnHeader column={column} title="ชื่อ" />, cell: ({ row }) => <div className="min-w-40"><p className="font-medium">{row.original.name}</p><p className="text-xs text-muted-foreground">{row.original.email}</p></div> },
     { id: "roles", header: "บทบาท", accessorFn: (row) => row.roles.map(({ name }) => name).join(" "), cell: ({ row }) => <div className="flex max-w-md flex-wrap gap-1">{row.original.roles.length ? row.original.roles.map((role) => <Badge key={role.id} variant="secondary">{role.name}</Badge>) : <span className="text-xs text-muted-foreground">ยังไม่มีบทบาท</span>}</div> },
@@ -41,7 +44,7 @@ export function UserManagement({ users, roles, currentUserId, permissions }: { u
     { accessorKey: "createdAt", header: ({ column }) => <DataTableColumnHeader column={column} title="สร้างเมื่อ" />, cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{formatDate(row.original.createdAt)}</span> },
     { id: "actions", header: () => <span className="sr-only">การทำงาน</span>, meta: { align: "right" }, cell: ({ row }) => canEdit ? <Button variant="ghost" size="icon" aria-label={`แก้ไข ${row.original.name}`} onClick={(event) => { event.stopPropagation(); setEditing(row.original); }}><Pencil className="size-4" /></Button> : null },
   ];
-  return <><DataTable columns={columns} data={users} searchPlaceholder="ค้นหาชื่อหรืออีเมล..." emptyTitle="ยังไม่มีผู้ใช้งาน" emptyDescription="สร้างบัญชีแรกเพื่อเริ่มกำหนดสิทธิ์การใช้งาน" toolbarActions={canCreate ? <Button size="sm" onClick={() => setEditing(null)}><Plus className="size-4" />เพิ่มผู้ใช้งาน</Button> : undefined} /><UserDialog key={editing === undefined ? "closed" : editing?.id ?? "new"} open={editing !== undefined} user={editing ?? null} roles={roles} currentUserId={currentUserId} canDisable={permissions.includes("user.disable")} onOpenChange={(open) => { if (!open) setEditing(undefined); }} onSaved={() => { setEditing(undefined); toast({ variant: "success", title: "บันทึกผู้ใช้งานแล้ว" }); router.refresh(); }} /></>;
+  return <><DataTable columns={columns} data={users} searchPlaceholder="ค้นหาชื่อหรืออีเมล..." emptyTitle="ยังไม่มีผู้ใช้งาน" emptyDescription="สร้างบัญชีแรกเพื่อเริ่มกำหนดสิทธิ์การใช้งาน" emptyAction={canCreate ? <Button onClick={() => setEditing(null)}>เพิ่มผู้ใช้งาน</Button> : undefined} /><UserDialog key={activeEditing === undefined ? "closed" : activeEditing?.id ?? "new"} open={activeEditing !== undefined} user={activeEditing ?? null} roles={roles} currentUserId={currentUserId} canDisable={permissions.includes("user.disable")} onOpenChange={(open) => { if (!open) closeDialog(); }} onSaved={() => { closeDialog(); toast({ variant: "success", title: "บันทึกผู้ใช้งานแล้ว" }); router.refresh(); }} /></>;
 }
 
 function UserDialog({ open, user, roles, currentUserId, canDisable, onOpenChange, onSaved }: { open: boolean; user: UserRow | null; roles: RoleOption[]; currentUserId: string; canDisable: boolean; onOpenChange: (open: boolean) => void; onSaved: () => void }) {
