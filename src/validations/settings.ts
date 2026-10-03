@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateThaiAddress } from "@/lib/thai-address";
 
 const optionalText = (maximum: number) => z.string().trim().max(maximum);
 const optionalEmail = z.string().trim().max(254).refine((value) => !value || z.email().safeParse(value).success, "อีเมลไม่ถูกต้อง");
@@ -24,6 +25,9 @@ export const generalSettingsSchema = z.object({
   email: optionalEmail,
   website: optionalUrl,
   logoUrl: optionalUrl,
+}).superRefine((value, context) => {
+  const issue = validateThaiAddress(value);
+  if (issue) context.addIssue({ code: "custom", path: [issue.field], message: issue.message });
 });
 
 export const salesSettingsSchema = z.object({

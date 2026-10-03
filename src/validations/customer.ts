@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { customerSortFields } from "@/config/customers";
+import { validateThaiAddress } from "@/lib/thai-address";
 
 const optionalText = (max: number) => z.string().trim().max(max);
 const optionalEmail = z.union([z.literal(""), z.email("กรุณากรอกอีเมลให้ถูกต้อง")]);
@@ -23,6 +24,9 @@ export const customerAddressSchema = z.object({
   countryCode: z.string().trim().length(2),
   deliveryNotes: optionalText(500),
   isDefault: z.boolean(),
+}).superRefine((value, context) => {
+  const issue = validateThaiAddress(value);
+  if (issue) context.addIssue({ code: "custom", path: [issue.field], message: issue.message });
 });
 
 export const customerFormSchema = z.object({
