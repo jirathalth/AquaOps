@@ -317,7 +317,7 @@ export function CustomerForm({
             >
               <Input
                 id="customer-display-name"
-                autoComplete="organization"
+
                 aria-invalid={Boolean(errors.displayName)}
                 {...form.register("displayName")}
               />
@@ -331,7 +331,7 @@ export function CustomerForm({
             >
               <Input
                 id="customer-contact-name"
-                autoComplete="name"
+
                 aria-invalid={Boolean(errors.contactName)}
                 {...form.register("contactName")}
               />
@@ -344,7 +344,7 @@ export function CustomerForm({
               <Input
                 id="customer-phone"
                 type="tel"
-                autoComplete="tel"
+
                 inputMode="tel"
                 aria-invalid={Boolean(errors.phone)}
                 {...form.register("phone")}
@@ -358,7 +358,7 @@ export function CustomerForm({
               <Input
                 id="customer-email"
                 type="email"
-                autoComplete="email"
+
                 aria-invalid={Boolean(errors.email)}
                 {...form.register("email")}
               />

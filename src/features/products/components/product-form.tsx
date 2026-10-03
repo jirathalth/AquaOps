@@ -37,7 +37,7 @@ export function ProductForm({ product, categories, units, canArchive }: { produc
   return <Card><CardContent><form className="space-y-6" onSubmit={form.handleSubmit(submit)} noValidate>
     {form.formState.errors.root?.message && <Alert variant="danger"><AlertDescription>{form.formState.errors.root.message}</AlertDescription></Alert>}
     <FormSection title="ข้อมูลสินค้า" description="ข้อมูลหลักสำหรับค้นหาและใช้อ้างอิงในเอกสาร">
-      <FormField label="SKU / รหัสสินค้า" htmlFor="sku" required error={form.formState.errors.sku?.message}><Input id="sku" autoComplete="off" placeholder="เช่น WATER-600" {...form.register("sku")} /></FormField>
+      <FormField label="SKU / รหัสสินค้า" htmlFor="sku" required error={form.formState.errors.sku?.message}><Input id="sku" placeholder="เช่น WATER-600" {...form.register("sku")} /></FormField>
       <FormField label="ชื่อสินค้า" htmlFor="name" required error={form.formState.errors.name?.message}><Input id="name" {...form.register("name")} /></FormField>
       <FormField label="หมวดหมู่" htmlFor="categoryId" error={form.formState.errors.categoryId?.message}><Controller name="categoryId" control={form.control} render={({ field }) => <Select value={field.value || "NONE"} onValueChange={(value) => field.onChange(value === "NONE" ? "" : value)}><SelectTrigger id="categoryId"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="NONE">ไม่ระบุหมวดหมู่</SelectItem>{activeCategories.map((item) => <SelectItem key={item.id} value={item.id} disabled={!item.isActive}>{item.name}{!item.isActive ? " (ไม่ใช้งาน)" : ""}</SelectItem>)}</SelectContent></Select>} /></FormField>
       <FormField className="sm:col-span-2 xl:col-span-3" label="คำอธิบาย" htmlFor="description" error={form.formState.errors.description?.message}><Textarea id="description" rows={3} {...form.register("description")} /></FormField>
@@ -45,7 +45,7 @@ export function ProductForm({ product, categories, units, canArchive }: { produc
     </FormSection>
     <FormSection title="หน่วยและบาร์โค้ด" description={product ? "หน่วยหลักเปลี่ยนไม่ได้หลังสร้าง เพื่อรักษาความถูกต้องของรายการอ้างอิง" : "กำหนดหน่วยหลักหนึ่งหน่วยสำหรับสินค้า"}>
       <FormField label="หน่วยหลัก" htmlFor="baseUnitId" required error={form.formState.errors.baseUnitId?.message}><Controller name="baseUnitId" control={form.control} render={({ field }) => <Select value={field.value} onValueChange={field.onChange} disabled={Boolean(product)}><SelectTrigger id="baseUnitId"><SelectValue placeholder="เลือกหน่วย" /></SelectTrigger><SelectContent>{activeUnits.map((item) => <SelectItem key={item.id} value={item.id} disabled={!item.isActive}>{item.nameTh} ({item.symbol}){!item.isActive ? " — ไม่ใช้งาน" : ""}</SelectItem>)}</SelectContent></Select>} /></FormField>
-      <FormField label="บาร์โค้ด" htmlFor="barcode" description="ไม่บังคับและต้องไม่ซ้ำ" error={form.formState.errors.barcode?.message}><Input id="barcode" inputMode="numeric" autoComplete="off" {...form.register("barcode")} /></FormField>
+      <FormField label="บาร์โค้ด" htmlFor="barcode" description="ไม่บังคับและต้องไม่ซ้ำ" error={form.formState.errors.barcode?.message}><Input id="barcode" inputMode="numeric" {...form.register("barcode")} /></FormField>
     </FormSection>
     <FormSection title="ราคา" description="เก็บเป็น Decimal 4 ตำแหน่งและใช้เป็นราคาสำรองเมื่อไม่มีราคาพิเศษ">
       <FormField label="ต้นทุน" htmlFor="cost" error={form.formState.errors.cost?.message}><CurrencyInput id="cost" min="0" {...form.register("cost")} /></FormField>
