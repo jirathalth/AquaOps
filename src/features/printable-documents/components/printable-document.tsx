@@ -45,14 +45,13 @@ export function PrintableDocument(props: Props) {
           <div className={styles.businessDetails}>
             <p className={styles.businessName}>{companyName}</p>
             {props.business.address && <p>{props.business.address}</p>}
-            {props.business.taxId && <p>เลขประจำตัวผู้เสียภาษี {props.business.taxId}{props.business.branch ? ` (${formatBranch(props.business.branch)})` : ""}</p>}
-            {props.business.phone && <p>โทร {props.business.phone}</p>}
+            {(props.business.taxId || props.business.phone) && <p>{props.business.taxId && <>เลขประจำตัวผู้เสียภาษี {props.business.taxId}{props.business.branch ? ` (${formatBranch(props.business.branch)})` : ""}</>}{props.business.taxId && props.business.phone && " · "}{props.business.phone && <>โทร {props.business.phone}</>}</p>}
           </div>
         </div>
         <div className={styles.documentIdentity}>{props.copyLabel && <p className={styles.copyLabel}>{props.copyLabel}</p>}<h1 id="print-document-title">{props.title}</h1><p className={styles.subtitle}>{props.subtitle}</p><p className={styles.documentNumber}>{props.documentNumber}</p>{props.statusLabel && <p className={styles.status}>{props.statusLabel}</p>}</div>
       </header>
       <section className={styles.information}>
-        <div className={styles.customer}><p className={styles.customerName}>{props.customer.name}</p><p>รหัสลูกค้า {props.customer.code}</p>{props.customer.taxId && <p>เลขประจำตัวผู้เสียภาษี {props.customer.taxId}{props.customer.branch ? ` (${formatBranch(props.customer.branch)})` : ""}</p>}{props.customer.address && <p>{props.customer.address}</p>}</div>
+        <div className={styles.customer}><p className={`${styles.customerField} ${styles.customerName}`}><span>นามลูกค้า</span><strong>{props.customer.name}</strong></p><p className={styles.customerField}><span>รหัสลูกค้า</span><span>{props.customer.code}</span></p>{props.customer.taxId && <p className={styles.customerField}><span>เลขประจำตัวผู้เสียภาษี</span><span>{props.customer.taxId}{props.customer.branch ? ` (${formatBranch(props.customer.branch)})` : ""}</span></p>}{props.customer.address && <p className={styles.customerField}><span>ที่อยู่</span><span>{props.customer.address}</span></p>}</div>
         <dl className={styles.metadata}>{metadata.map((item) => <div key={item.label}><dt>{item.label}</dt><dd>{item.value || "-"}</dd></div>)}</dl>
       </section>
       <table className={styles.table}><caption className="sr-only">{props.tableCaption}</caption><thead><tr>{props.columns.map((column) => <th key={column.key} className={column.align ? styles[column.align] : undefined} style={{ width: column.width }}>{column.label}</th>)}</tr></thead><tbody>{props.rows.map((row) => <tr key={row.key}>{props.columns.map((column) => <td key={column.key} className={column.align ? styles[column.align] : undefined}>{printValue(row.cells[column.key] ?? "-")}</td>)}</tr>)}</tbody></table>
